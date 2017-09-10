@@ -10,33 +10,33 @@ import Tkinter as tk
 class Application(tk.Frame):
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
-        self.grid(columnspan=100,rowspan=50)
+        self.grid()
         self.createWidgets()
         
     def createWidgets(self):
         top = self.winfo_toplevel()
-        for i in range(0,50):
-            top.rowconfigure(i,weight=1)
-            top.columnconfigure(i,weight=1)
-        self.quitButton = tk.Button(self, text='Quit',command=self.quit)
-        self.quitButton.grid(column=1,columnspan=3)
+        # for i in range(0,50):
+            # top.rowconfigure(i,weight=1)
+            # top.columnconfigure(i,weight=1)
+   #     self.quitButton = tk.Button(self, text='Quit',command=self.quit)
+    #    self.quitButton.grid(column=1,columnspan=3)
         
         self.filepath = tk.Entry(self)
-        self.filepath.grid(row=2,column=0,columnspan=10)
+        self.filepath.grid(row=2,column=0,columnspan=15)
         self.loadButton = tk.Button(self,text='Load')
-        self.loadButton.grid(row=2,column=10)
+        self.loadButton.grid(row=2,column=15)
         self.saveButton = tk.Button(self,text='Save')
-        self.saveButton.grid(row=2,column=11)
-        self.randomButton = tk.Button(self, text='Random',command=self.executeRandom())
-        self.randomButton.grid(row=3,column=15)
-        self.deleteButton = tk.Button(self, text='Delete',command=self.executeRandom())
-        self.deleteButton.grid(row=4,column=15)
-        self.historyButton = tk.Button(self, text='History',command=self.executeRandom())
-        self.historyButton.grid(row=6,column=15)
-        self.linkButton = tk.Button(self, text='Link',command=self.executeRandom())
-        self.linkButton.grid(row=5,column=15)
+        self.saveButton.grid(row=2,column=16)
+        self.randomButton = tk.Button(self, text='Random')
+        self.randomButton.grid(row=3,column=16)
+        self.deleteButton = tk.Button(self, text='Delete')
+        self.deleteButton.grid(row=4,column=16)
+        self.historyButton = tk.Button(self, text='History')
+        self.historyButton.grid(row=6,column=16)
+        self.linkButton = tk.Button(self, text='Link')
+        self.linkButton.grid(row=5,column=16)
         self.dataBase = tk.Listbox(self)
-        self.dataBase.grid(row=3, column=0, rowspan=9,columnspan=15)
+        self.dataBase.grid(row=3, column=0, rowspan=9,columnspan=16)
         self.selector = SelectorFrame()
         self.selector.grid(row=9,column=16,rowspan=6,columnspan=4)
         self.infobox = InfoFrame()
@@ -97,7 +97,7 @@ class InfoFrame(tk.Frame):
         self.genreEntry = tk.Label(self, text='Horror')
         self.genreEntry.grid(row=1,column=3)
         
-        self.applyButton = tk.Button(self,text='Apply Selection')
+        self.applyButton = tk.Button(self,text='Show Infopage')
         self.applyButton.grid(row=4,column=0,columnspan=2)
 
 
