@@ -6,12 +6,20 @@ This is a temporary script file.
 """
 
 import Tkinter as tk
+import media_database as mdb
+
 
 class Application(tk.Frame):
+    media_database = Null
+    history = []
+    historyFrameActive = False
+    last = Null
+    
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
         self.grid()
         self.createWidgets()
+        #self.bindActions()
         
     def createWidgets(self):
         top = self.winfo_toplevel()
@@ -46,6 +54,71 @@ class Application(tk.Frame):
         self.labelah = tk.Label(self, text='aaaaah')
         self.labelah.grid(row=3)
         print('aaaaah')
+    
+    def binActions(self):
+        self.loadButton.bind("<Button-1>", load)
+        self.saveButton.bind("<Button-1>", save)
+        self.linkButton.bind("<Button-1>", linkFile)
+        self.deleteButton.bind("<Button-1>", deleteFile)
+        self.randomButton.bind("<Button-1>", randomFile) 
+        self.historyButton.bind("<Button-1>", displayHistory) 
+        self.selector.applyButton.bind("<Button-1>", displaySelection)
+        self.dataBase.bind(
+        self.pack()    
+    self.pack()
+        
+    def load():
+        print self.filepath.get()
+        if self.media_database != Null and !self.media_database.saved:
+            #open Warning dialog with save option
+        self.media_database = mdb.media_database(self.filepath.get())
+        self.dataBase.delete(0,END)
+        for i in self.media_database.get_selection():
+            self.dataBase.insert(END,item)
+    
+    def save():
+        self.media_database.save()
+        
+    def linkFile():
+        id = self.dataBase.get(ACTIVE)
+        try:
+            entry = self.media_database.get_entry(id)
+            #open dialog to find destination of link
+        #    os.link()
+        except:
+            #open dialog with file not found
+
+    def deleteFile():
+        id = self.dataBase.get(ACTIVE)
+        try:
+            entry = self.media_database.get_entry(id)
+            #open dialog to issue warning about deleting file
+            #self.media_database.delete(entry)
+        except:
+            #open dialog with file not found            
+
+    def randomFile():
+        self.last = self.media_database.executeRandom()
+        history.append(self.last)
+        if historyFrameActive:
+            self.historyFrame.append(self.last)        
+        
+    def displayHistory():
+        #open dialog with listbox that contains the entries of history + bind actions similar to media_database 
+        #( == doubleclick -> dialog for open and delete
+        #     singleclick -> infobox )
+        #     rightclick -> dropdown with "add Tag or modify or something like that" 
+        # )
+        historyFrameActive = True
+        
+    def displaySelection():
+        args = self.selector.getArgs()
+        
+        self.dataBase.delete(0,END)
+        for i in self.media_database.get_selection(args):
+            self.dataBase.insert(END,item)
+        
+       
         
         
 class SelectorFrame(tk.Frame):
@@ -72,9 +145,8 @@ class SelectorFrame(tk.Frame):
         
         self.applyButton = tk.Button(self,text='Apply Selection')
         self.applyButton.grid(row=4,column=0,columnspan=2)
-
-
-
+    
+        
 class InfoFrame(tk.Frame):
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)

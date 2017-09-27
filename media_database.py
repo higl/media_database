@@ -188,7 +188,14 @@ class media_database:
             if i.match_selection(*args,**kwargs):
                 list.append(i.get_display_string())
         
-            
+    def get_entry(name):
+        hash = hash(name)
+        for i in dlist:
+            if i.hash() == hash:
+                return i
+        
+        raise NotAnEntryError
+        
 class media_entry:
     import os
     path = ''
