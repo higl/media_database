@@ -10,16 +10,16 @@ import media_database as mdb
 
 
 class Application(tk.Frame):
-    media_database = Null
+    media_database = None
     history = []
     historyFrameActive = False
-    last = Null
+    last = None
     
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
         self.grid()
         self.createWidgets()
-        #self.bindActions()
+        self.bindActions()
         
     def createWidgets(self):
         top = self.winfo_toplevel()
@@ -55,55 +55,57 @@ class Application(tk.Frame):
         self.labelah.grid(row=3)
         print('aaaaah')
     
-    def binActions(self):
-        self.loadButton.bind("<Button-1>", load)
-        self.saveButton.bind("<Button-1>", save)
-        self.linkButton.bind("<Button-1>", linkFile)
-        self.deleteButton.bind("<Button-1>", deleteFile)
-        self.randomButton.bind("<Button-1>", randomFile) 
-        self.historyButton.bind("<Button-1>", displayHistory) 
-        self.selector.applyButton.bind("<Button-1>", displaySelection)
-        self.dataBase.bind(
-        self.pack()    
-    self.pack()
+    def bindActions(self):
+        self.loadButton.bind("<Button-1>", self.load)
+        self.saveButton.bind("<Button-1>", self.save)
+        self.linkButton.bind("<Button-1>", self.linkFile)
+        self.deleteButton.bind("<Button-1>", self.deleteFile)
+        self.randomButton.bind("<Button-1>", self.randomFile) 
+        self.historyButton.bind("<Button-1>", self.displayHistory) 
+        self.selector.applyButton.bind("<Button-1>", self.displaySelection)
+        #self.dataBase.bind(
+        #self.pack()    
         
-    def load():
-        print self.filepath.get()
-        if self.media_database != Null and !self.media_database.saved:
+    def load(self,event):
+        self.dataBase.insert(tk.END,self.filepath.get())
+        if self.media_database != None and not self.media_database.saved:
             #open Warning dialog with save option
+            print 'bla'
         self.media_database = mdb.media_database(self.filepath.get())
-        self.dataBase.delete(0,END)
+        self.dataBase.delete(0,tk.END)
         for i in self.media_database.get_selection():
-            self.dataBase.insert(END,item)
+            self.dataBase.insert(tk.END,i)
     
-    def save():
+    def save(self,event):
         self.media_database.save()
         
-    def linkFile():
-        id = self.dataBase.get(ACTIVE)
+    def linkFile(self,event):
+        id = self.dataBase.get(tk.ACTIVE)
         try:
             entry = self.media_database.get_entry(id)
             #open dialog to find destination of link
         #    os.link()
         except:
+            print "error"
             #open dialog with file not found
 
-    def deleteFile():
-        id = self.dataBase.get(ACTIVE)
+    def deleteFile(self,event):
+        id = self.dataBase.get(tk.ACTIVE)
         try:
             entry = self.media_database.get_entry(id)
             #open dialog to issue warning about deleting file
             #self.media_database.delete(entry)
         except:
+            print "error"
             #open dialog with file not found            
 
-    def randomFile():
-        self.last = self.media_database.executeRandom()
-        history.append(self.last)
-        if historyFrameActive:
+    def randomFile(self,event):
+        self.last = self.media_database.execute_random()
+        self.history.append(self.last)
+        if self.historyFrameActive:
             self.historyFrame.append(self.last)        
         
-    def displayHistory():
+    def displayHistory(self,event):
         #open dialog with listbox that contains the entries of history + bind actions similar to media_database 
         #( == doubleclick -> dialog for open and delete
         #     singleclick -> infobox )
@@ -111,12 +113,12 @@ class Application(tk.Frame):
         # )
         historyFrameActive = True
         
-    def displaySelection():
+    def displaySelection(self,event):
         args = self.selector.getArgs()
         
-        self.dataBase.delete(0,END)
+        self.dataBase.delete(0,tk.END)
         for i in self.media_database.get_selection(args):
-            self.dataBase.insert(END,item)
+            self.dataBase.insert(tk.END,item)
         
        
         
@@ -174,8 +176,8 @@ class InfoFrame(tk.Frame):
 
 
 
-
+master = tk.Tk()
 app = Application()
 app.master.title('Sample application')
 
-app.mainloop()
+master.mainloop()

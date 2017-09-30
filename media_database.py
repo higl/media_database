@@ -15,8 +15,8 @@ else:
 
 class media_database:
     import os
-    import cpickle
-    
+    import pickle
+    #//TODO convert strings into raw strings
     parent = ''
     dlist = []
     p_style = ''
@@ -26,11 +26,11 @@ class media_database:
     saved = False
     
     
-    def __init__(d,p_style = 'first',v_style = 'random',m_style = 'random',e_style = 'first'):
+    def __init__(self,d,p_style = 'first',v_style = 'random',m_style = 'random',e_style = 'first'):
         cwd = os.getcwd()
         
         for i in os.listdir(cwd):
-            if os.path.spli()[1] == d:
+            if os.path.split(i)[1] == d:
                 self._load_(i)
                 return
         
@@ -43,57 +43,61 @@ class media_database:
         self.saved = False
         return
     
-    def _load_(d):
+    def _load_(self,d):
         if already_exists:
             self.saved = True
         
-    def save():
+    def save(self):
         self.saved = True
         
-    def execute_random():    
+    def execute_random(self):    
         #TODO replace os.system by something safer like subprocess
         
-        random_medium = random.choice(dlist)
-        random_medium.get_filepath()
-                   
+        random_medium = random.choice(self.dlist)
+        filepath = random_medium.get_filepath()  
         if os.name == 'nt':
             os.system("start "+filepath)
         elif os.name == 'posix':
+            #filepath = self.parent+'/'+filepath
+            specialchars = [' ', '(', ')']
+            for i in specialchars:
+                filepath = filepath.replace(i,'\\'+i)
             os.system("xdg-open "+filepath)
         
     
-    def fill(d,type='unknown'):
+    def fill(self,d,ty='unknown'):
         for i in os.listdir(d):
-            if type != 'unknown':
-                t = self.determine_media_type(i)
+            path = d + '/' + i 
+            if ty == 'unknown':
+                t = self.determine_media_type(path)
             else:
-                t = type
+                t = ty
                 
             if t == 'video':
-                new_entry = video_entry(i,style = v_style)
+                new_entry = video_entry(path,style = self.v_style)
             elif t == 'music':
-                new_entry = music_entry(i,style = m_style)
+                new_entry = music_entry(path,style = self.m_style)
             elif t == 'exec':
-                new_entry = executable_entry(i,style = e_style)
-            elif t == 'picutre':
-                new_entry = picture_entry(i,style = p_style)
+                new_entry = executable_entry(path,style = self.e_style)
+            elif t == 'picture':
+                new_entry = picture_entry(path,style = self.p_style)
             else:
-                new_entry = media_entry(i)
+                new_entry = media_entry(path)
 
             self.dlist.append(new_entry)
-        
+            print t
         saved = False
         
-    def determine_media_type(input):
-    ***
-        This function takes a path as an input and then searches through all the files associated with that path (recursively!).
-        Depending on the file extensions found, it will decide which type of media should be associated with that path.
-        
-        The decision has the following priority when several media types are found:
-            executable - video - music - picture 
+    def determine_media_type(self,i):
+        """
+            This function takes a path as an input and then searches through all the files associated with that path (recursively!).
+            Depending on the file extensions found, it will decide which type of media should be associated with that path.
             
-        if no media type is found it will return 'unknown'
-    ***
+            The decision has the following priority when several media types are found:
+                executable - video - music - picture 
+                
+            if no media type is found it will return 'unknown'
+        """
         accepted_video_formats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg')
         accepted_music_formats = ('.mp3', '.wma', '.flac','.ogg')
         accepted_execs = ('.exe','.jar')
@@ -104,9 +108,9 @@ class media_database:
         music = False
         
         folderList = []
-        if os.path.isdir(input)
-            folderList = [input]
-        elif input.lower().endswith(accepted_picture_formats):
+        if os.path.isdir(i):
+            folderList = [i]
+        elif i.lower().endswith(accepted_picture_formats):
             picture = True
         elif i.lower().endswith(accepted_video_formats):
             video = True
@@ -114,13 +118,14 @@ class media_database:
             music = True
         elif i.lower().endswith(accepted_execs):
             ex = True
-            
+        print folderList, i
         while len(folderList)>0:
             ls = os.listdir(folderList[0])
-            
+            print folderList
             for i in ls:
-                if os.path.isdir(i):
-                    folderList.append(i)
+                p = folderList[0] + '/' + i
+                if os.path.isdir(p):
+                    folderList.append(p)
                 elif i.lower().endswith(accepted_picture_formats):
                     picture = True
                 elif i.lower().endswith(accepted_video_formats):
@@ -143,13 +148,13 @@ class media_database:
             return 'unknown'
     
         
-    def add_entry(d,*args,**kwargs):
-    ***
-        This function adds an media_entry to the database.
-        
-        It first determines the appropriate media type and creates the media_entry 
-        if also checks if the same entry already exists. In that case the new media_entry is not added. 
-    ***
+    def add_entry(self,d,*args,**kwargs):
+        """
+            This function adds an media_entry to the database.
+            
+            It first determines the appropriate media type and creates the media_entry 
+            if also checks if the same entry already exists. In that case the new media_entry is not added. 
+        """
     
         hash = hash(d)
         for i in self.dlist:
@@ -175,20 +180,24 @@ class media_database:
         self.saved = False
 
         
-    def delete_entry(entry,delete_from_disk=False):
+    def delete_entry(self,entry,delete_from_disk=False):
         if delete_from_disk:
-        self.saved = False    
+            self.saved = False    
         
-    def change_style():
-        //TODO this has to be done for every element of the respective type
+    def change_style(self):
+        """
+            //TODO this has to be done for every element of the respective type
+        """
+        print 'done'
         
-    def get_selection(*args,**kwargs):
-        list = []
+    def get_selection(self,*args,**kwargs):
+        l = []
         for i in self.dlist:
             if i.match_selection(*args,**kwargs):
-                list.append(i.get_display_string())
+                l.append(i.get_display_string())
+        return l
         
-    def get_entry(name):
+    def get_entry(self,name):
         hash = hash(name)
         for i in dlist:
             if i.hash() == hash:
@@ -204,9 +213,10 @@ class media_entry:
     type = ''
     hash = ''
     
-    //TODO move attributes to a dictionary ?
-    
-    def __init__(path, type='unknown',style='random'):
+    """ 
+        //TODO move attributes to a dictionary ?
+    """
+    def __init__(self,path, type='unknown',style='random'):
         self.path = path
         self.type = type
         self.style = style
@@ -220,19 +230,19 @@ class media_entry:
             filepath = ''
         self.hash = hash(self.path)
         
-    def get_path():
+    def get_path(self):
         return self.path
 
-    def get_display_string():
+    def get_display_string(self):
         return os.path.split(self.path)[1]
         
-    def get_type():
+    def get_type(self):
         return self.type
 
-    def get_hash():
+    def get_hash(self):
         return self.hash
 
-    def get_filepath():
+    def get_filepath(self):
         d = self.path
         file_not_found = True
         continue_search = False
@@ -241,9 +251,11 @@ class media_entry:
                 ls = os.listdir(d)
                 if len(ls) == 0:
                     raise EmptyFolderException('please delete')
-                d = quote_args([d + random.choice()])
+                d = quote_args([d + random.choice(ls)])
                 continue_search = False
-            elif:
+            elif not os.path.isdir(d):
+                return self.path
+            else:
                 f = self.determine_exec_file(os.path.split(d)[0])
                 if f == '':
                     continue_search = True
@@ -253,13 +265,13 @@ class media_entry:
         
         if self.style == 'random':
             return find_random()
-        else 
+        else:
             return self.filepath
 
             
-    def determine_exec_file(d,extensions='all'): 
+    def determine_exec_file(self,d,extensions='all'): 
         ls = [d + i for i in os.listdir(d)]
-        
+        print d, ls
         folder = False
         picture = False
         video = False
@@ -279,35 +291,35 @@ class media_entry:
                 folder = True
             elif i.lower().endswith(accepted_picture_formats):
                 picture = True
-                if self.p_style = 'first' and len(pf) == 0:
+                if self.p_style == 'first' and len(pf) == 0:
                     pf = [i]
-                elif self.p_style = 'last':
+                elif self.p_style == 'last':
                     pf = [i]
-                elif self.p_style = 'random'
+                elif self.p_style == 'random':
                     pf.append(i)
             elif i.lower().endswith(accepted_video_formats):
                 video = True
-                if self.v_style = 'first' and len(vf) == 0:
+                if self.v_style == 'first' and len(vf) == 0:
                     vf = [i]
-                elif self.v_style = 'last':
+                elif self.v_style == 'last':
                     vf = [i]
-                elif self.v_style = 'random'
+                elif self.v_style == 'random':
                     vf.append(i)
             elif i.lower().endswith(accepted_music_formats):
                 music = True
-                if self.m_style = 'first' and len(mf) == 0:
+                if self.m_style == 'first' and len(mf) == 0:
                     mf = [i]
-                elif self.m_style = 'last':
+                elif self.m_style == 'last':
                     mf = [i]
-                elif self.m_style = 'random'
+                elif self.m_style == 'random':
                     mf.append(i)
             elif i.lower().endswith(accepted_execs):
                 ex = True
-                if self.e_style = 'first' and len(ef) == 0:
+                if self.e_style == 'first' and len(ef) == 0:
                     ef = [i]
-                elif self.e_style = 'last':
+                elif self.e_style == 'last':
                     ef = [i]
-                elif self.e_style = 'random'
+                elif self.e_style == 'random':
                     ef.append(i)
                 
 
@@ -324,17 +336,19 @@ class media_entry:
         else:
             raise StrangeFolderException('Don\'t know what to do with ', d)
             
-    def find_first(path):
-        
-    def find_last(path):
-        
-    def find_random(path):
-
-    def match_selection(type=''):
+    def find_first(self,path):
+        print 'found'
+    def find_last(self,path):
+        print 'found'        
+    def find_random(self,path):
+        print 'found'
+    def match_selection(self,type=''):
+        """
         \\TODO make this more general with a dictionary of attributes
+        """
         if type == '' or self.type == type:
             return True
-        else 
+        else: 
             return False
         
 class video_entry(media_entry):
@@ -343,46 +357,48 @@ class video_entry(media_entry):
     genre = ''
     accepted_video_formats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg')
         
-    def __init__(path, tags=[], actors=[], genre='unknown',style='first'):
-        media_entry.__init__(path,type='video')
+    def __init__(self,path, tags=[], actors=[], genre='unknown',style='first'):
+        media_entry.__init__(self,path,type='video')
         self.tags = tags
         self.actors = actors
         self.genre = genre
     
-    def get_genre():
+    def get_genre(self):
         return self.genre
     
-    def get_tags():
+    def get_tags(self):
         return self.tags
         
-    def get_actors():
-        retrun self.actors
+    def get_actors(self):
+        return self.actors
     
-    def has_tag(tag):
+    def has_tag(self,tag):
         tag_str = str(tag)
         tag_str = tag_str.lower()
         if tag_str in self.tags.lower():
             return True
-        else 
+        else: 
             return False
     
-    def has_actor(actor):
-        \\TODO account for partial matches, e.g. 'Tom Cruise' should be triggered by 'tom' 'cruise' or 'tom cruise'
+    def has_actor(self,actor):
+        """
+            \\TODO account for partial matches, e.g. 'Tom Cruise' should be triggered by 'tom' 'cruise' or 'tom cruise'
+        """
         actor_str = str(actor)
         actor_str = actor_str.lower()
         if actor_str in self.actor.lower():
             return True
-        else 
+        else: 
             return False    
             
-    def is_genre(genre):
+    def is_genre(self,genre):
         genre = str(genre).lower()
         return self.genre.lower() == genre 
     
-    def determine_exec_file(d):
+    def determine_exec_file(self,d):
         return media_entry.determine_exec_file(d,extensions=self.accepted_video_formats)
     
-    def match_selection(type = 'unknown', tags = [], actor = [], genre = ''):
+    def match_selection(self,type = 'unknown', tags = [], actor = [], genre = ''):
         if type != 'unknown' and not media_entry.match_selection(type):
             return False
         elif genre != '' and not is_genre(genre):
@@ -400,39 +416,41 @@ class music_entry(media_entry):
     artist = []
     genre = []
     
-    def __init__(path, tags=[], artist=[], genre=['unknown'],style='random'):
-        media_entry.__init__(path,type='video')
+    def __init__(self,path, tags=[], artist=[], genre=['unknown'],style='random'):
+        media_entry.__init__(self,path,type='video')
         self.tags = tags
         self.artist = artist
         self.genre = genre
     
-    def get_genre():
+    def get_genre(self):
         return self.genre
     
-    def get_tags():
+    def get_tags(self):
         return self.tags
         
-    def get_artist():
-        retrun self.artist
+    def get_artist(self):
+        return self.artist
     
-    def has_tag(tag):
+    def has_tag(self,tag):
         tag_str = str(tag)
         tag_str = tag_str.lower()
         if tag_str in self.tags.lower():
             return True
-        else 
+        else: 
             return False
     
-    def has_artist(artist):
-        \\TODO account for partial matches, e.g. 'Tom Cruise' should be triggered by 'tom' 'cruise' or 'tom cruise' 
+    def has_artist(self,artist):
+        """
+            \\TODO account for partial matches, e.g. 'Tom Cruise' should be triggered by 'tom' 'cruise' or 'tom cruise' 
+        """
         actor_str = str(actor)
         actor_str = actor_str.lower()
         if actor_str in self.actor.lower():
             return True
-        else 
+        else: 
             return False    
             
-    def is_genre(genre):
+    def is_genre(self,genre):
         genre = str(genre).lower()
         return self.genre.lower() == genre
     
@@ -443,5 +461,6 @@ class picture_entry(media_entry):
 class executable_entry(media_entry):
     accepted_execs = ('.exe','.jar')
     
-d = '/home/johann/Dropbox/To Read/'
-execute_random(d)
+#d = '/home/johann/Dropbox/To Read/'
+
+#execute_random(d)
