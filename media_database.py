@@ -56,7 +56,8 @@ class media_database:
         random_medium = random.choice(self.dlist)
         filepath = random_medium.get_filepath()  
         if os.name == 'nt':
-            os.system("start "+filepath)
+            filepath = '"' + filepath + '"'
+            os.system(filepath)
         elif os.name == 'posix':
             #filepath = self.parent+'/'+filepath
             specialchars = [' ', '(', ')']
@@ -85,7 +86,6 @@ class media_database:
                 new_entry = media_entry(path)
 
             self.dlist.append(new_entry)
-            print t
         saved = False
         
     def determine_media_type(self,i):
@@ -118,10 +118,8 @@ class media_database:
             music = True
         elif i.lower().endswith(accepted_execs):
             ex = True
-        print folderList, i
         while len(folderList)>0:
             ls = os.listdir(folderList[0])
-            print folderList
             for i in ls:
                 p = folderList[0] + '/' + i
                 if os.path.isdir(p):
@@ -208,28 +206,59 @@ class media_database:
 class media_entry:
     import os
     path = ''
-    filepath = ''
+    filepath = []
     style = ''
     type = ''
     hash = ''
+    accepted_format = ()
     
     """ 
         //TODO move attributes to a dictionary ?
     """
-    def __init__(self,path, type='unknown',style='random'):
+    def __init__(self,path, type='unknown',style='random',format=()):
         self.path = path
         self.type = type
         self.style = style
-        if self.style == 'first':
-            filepath = find_first(self.path)
-        elif self.style == 'last':
-            filepath = find_first(self.path)
-        elif self.style == 'random':
-            filepath = ''
-        else:
-            filepath = ''
+        self.accepted_format = format
+        self.filepath = self._determine_files_(self.path,self.style,self.accepted_format)
         self.hash = hash(self.path)
         
+    def _determine_files_(self,path,style,format):
+        fileList = []        
+        folderList = []
+        if os.path.isdir(path):
+            folderList = [path]
+        elif len(format)==0 or path.lower().endswith(format):
+            fileList.append(path)
+            return fileList
+        else:
+            return ['']
+            #raise NoExecutableFileFoundException
+            
+        while len(folderList)>0:
+            ls = os.listdir(folderList[0])
+            print ls 
+            for i in ls:
+                p = folderList[0] + '/' + i
+                print p
+                if os.path.isdir(p):
+                    folderList.append(p)
+                elif len(format)==0 or p.lower().endswith(format):
+                    fileList.append(p)
+                    if style=='first':
+                        return fileList
+          
+            folderList.pop(0)
+        
+        print fileList
+        if len(fileList)==0:
+            return ['']
+            #raise NoExecutableFileFoundException
+        elif style=='last':
+            return [fileList[-1]]
+        else:
+            return fileList
+
     def get_path(self):
         return self.path
 
@@ -244,97 +273,13 @@ class media_entry:
 
     def get_filepath(self):
         #//TODO redo this function in the same manner as determine_media_type with the recurive order search. For styles fist, last, etc. self.filepath has to be set and in the next this will be returned  or even save arrays for random access in media_entry
-        d = self.path
-        print d
-        file_not_found = True
-        continue_search = False
-        while file_not_found:
-            if continue_search or os.path.isdir(d):
-                ls = os.listdir(d)
-                if len(ls) == 0:
-                    raise EmptyFolderException('please delete')
-                d = quote_args([d + random.choice(ls)])
-                continue_search = False
-            else:
-                f = self.determine_exec_file(os.path.split(d)[0])
-                if f == '':
-                    continue_search = True
-                else:
-                    filepath = f
-                    file_not_found = False
-        
-        if self.style == 'random':
-            return find_random()
-        else:
-            return self.filepath
-
+        if self.style == 'first':
+            return self.filepath[0]
+        elif self.style == 'last':
+            return self.filepath[-1]
+        elif self.style == 'random':
+            return random.choice(self.filepath)
             
-    def determine_exec_file(self,d,extensions='all'): 
-        ls = [d + i for i in os.listdir(d)]
-        print d, ls
-        folder = False
-        picture = False
-        video = False
-        ex = False
-        music = False
-        
-        pf = []
-        vf = []
-        mf = []
-        ef = []
-        
-
-        accepted_video_formats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg')
-        
-        for i in ls:
-            if os.path.isdir(i):
-                folder = True
-            elif i.lower().endswith(accepted_picture_formats):
-                picture = True
-                if self.p_style == 'first' and len(pf) == 0:
-                    pf = [i]
-                elif self.p_style == 'last':
-                    pf = [i]
-                elif self.p_style == 'random':
-                    pf.append(i)
-            elif i.lower().endswith(accepted_video_formats):
-                video = True
-                if self.v_style == 'first' and len(vf) == 0:
-                    vf = [i]
-                elif self.v_style == 'last':
-                    vf = [i]
-                elif self.v_style == 'random':
-                    vf.append(i)
-            elif i.lower().endswith(accepted_music_formats):
-                music = True
-                if self.m_style == 'first' and len(mf) == 0:
-                    mf = [i]
-                elif self.m_style == 'last':
-                    mf = [i]
-                elif self.m_style == 'random':
-                    mf.append(i)
-            elif i.lower().endswith(accepted_execs):
-                ex = True
-                if self.e_style == 'first' and len(ef) == 0:
-                    ef = [i]
-                elif self.e_style == 'last':
-                    ef = [i]
-                elif self.e_style == 'random':
-                    ef.append(i)
-                
-
-        if ex:
-            return random.choice(ef)
-        elif video:
-            return random.choice(vf)
-        elif music:
-            return random.choice(mf)
-        elif picture:
-            return random.choice(pf)
-        elif folder:
-            return ''
-        else:
-            raise StrangeFolderException('Don\'t know what to do with ', d)
             
     def find_first(self,path):
         print 'found'
@@ -358,7 +303,7 @@ class video_entry(media_entry):
     accepted_video_formats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg')
         
     def __init__(self,path, tags=[], actors=[], genre='unknown',style='first'):
-        media_entry.__init__(self,path,type='video')
+        media_entry.__init__(self,path,type='video',format=self.accepted_video_formats)
         self.tags = tags
         self.actors = actors
         self.genre = genre
@@ -394,10 +339,7 @@ class video_entry(media_entry):
     def is_genre(self,genre):
         genre = str(genre).lower()
         return self.genre.lower() == genre 
-    
-    def determine_exec_file(self,d):
-        return media_entry.determine_exec_file(self,d,extensions=self.accepted_video_formats)
-    
+        
     def match_selection(self,type = 'unknown', tags = [], actor = [], genre = ''):
         if type != 'unknown' and not media_entry.match_selection(type):
             return False
@@ -417,7 +359,7 @@ class music_entry(media_entry):
     genre = []
     
     def __init__(self,path, tags=[], artist=[], genre=['unknown'],style='random'):
-        media_entry.__init__(self,path,type='video')
+        media_entry.__init__(self,path,type='music',format=self.accepted_music_formats)
         self.tags = tags
         self.artist = artist
         self.genre = genre
