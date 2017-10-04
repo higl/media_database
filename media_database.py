@@ -243,7 +243,9 @@ class media_entry:
         return self.hash
 
     def get_filepath(self):
+        #//TODO redo this function in the same manner as determine_media_type with the recurive order search. For styles fist, last, etc. self.filepath has to be set and in the next this will be returned  or even save arrays for random access in media_entry
         d = self.path
+        print d
         file_not_found = True
         continue_search = False
         while file_not_found:
@@ -253,8 +255,6 @@ class media_entry:
                     raise EmptyFolderException('please delete')
                 d = quote_args([d + random.choice(ls)])
                 continue_search = False
-            elif not os.path.isdir(d):
-                return self.path
             else:
                 f = self.determine_exec_file(os.path.split(d)[0])
                 if f == '':
@@ -396,7 +396,7 @@ class video_entry(media_entry):
         return self.genre.lower() == genre 
     
     def determine_exec_file(self,d):
-        return media_entry.determine_exec_file(d,extensions=self.accepted_video_formats)
+        return media_entry.determine_exec_file(self,d,extensions=self.accepted_video_formats)
     
     def match_selection(self,type = 'unknown', tags = [], actor = [], genre = ''):
         if type != 'unknown' and not media_entry.match_selection(type):
