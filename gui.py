@@ -7,7 +7,8 @@ This is a temporary script file.
 
 import Tkinter as tk
 import media_database as mdb
-
+import media_entry as me
+import threading
 
 class Application(tk.Frame):
     media_database = None
@@ -37,6 +38,9 @@ class Application(tk.Frame):
         self.saveButton.grid(row=2,column=16)
         self.randomButton = tk.Button(self, text='Random')
         self.randomButton.grid(row=3,column=16)
+        self.singleMode = tk.IntVar()
+        self.singleBox = tk.Checkbutton(self,text='single',variable=self.singleMode)
+        self.singleBox.grid(row=3,column=17)
         self.deleteButton = tk.Button(self, text='Delete')
         self.deleteButton.grid(row=4,column=16)
         self.historyButton = tk.Button(self, text='History')
@@ -100,10 +104,13 @@ class Application(tk.Frame):
             #open dialog with file not found            
 
     def randomFile(self,event):
-        self.last = self.media_database.execute_random()
-        self.history.append(self.last)
+        self.last = self.media_database.get_random_entry(single=self.singleMode.get())
+        self.history.append(self.last)  
         if self.historyFrameActive:
-            self.historyFrame.append(self.last)        
+            self.historyFrame.append(self.last)
+        t = threading.Thread(target=self.last.execute,kwargs={'singleMode':self.singleMode.get()})
+        t.setDaemon(True)
+        t.start() 
         
     def displayHistory(self,event):
         #open dialog with listbox that contains the entries of history + bind actions similar to media_database 
