@@ -2,6 +2,8 @@ import os
 import random
 import sys
 from media_entry import *
+import pickle
+from time import time
 mswindows = (sys.platform == "win32")
 
 if mswindows:
@@ -19,21 +21,27 @@ class media_database:
     import pickle
     #//TODO convert strings into raw strings
     parent = ''
+    hash = ''
     #//TODO make dlist a numpy array and then use the masking function for the reduced "unplayed" list in get_random_entry
     dlist = []
     p_style = ''
     v_style = ''
     m_style = ''
     e_style = ''
+
     saved = False
     
     
     def __init__(self,d,p_style = 'first',v_style = 'random',m_style = 'random',e_style = 'first'):
-        cwd = os.getcwd()
+        self.parent = d
+        self.hash = hash(d)
         
+        cwd = os.getcwd()        
         for i in os.listdir(cwd):
-            if os.path.split(i)[1] == d:
+            if os.path.split(i)[1] == str(self.hash)+'.pkl':
                 self._load_(i)
+                if os.path.getmtime(d) > self.mtime:
+                    self.update(d)
                 return
         
         self.p_style = p_style
@@ -41,17 +49,33 @@ class media_database:
         self.m_style = m_style
         self.e_style = e_style
         self.fill(d)
-        self.parent = d
+        self.mtime = time()
         self.saved = False
         return
     
     def _load_(self,d):
-        if already_exists:
-            self.saved = True
-        
+        with open(d, 'rb') as input:
+            db = pickle.load(input)
+            self.dlist = db['dlist']
+            self.p_style = db['pstyle']
+            self.m_style = db['mstyle']
+            self.v_style = db['vstyle']
+            self.e_style = db['estyle']
+            self.mtime = db['mtime']
+        self.saved = True
+            
     def save(self):
         self.saved = True
-    
+        out = {}
+        out['dlist']=self.dlist
+        out['pstyle']=self.p_style
+        out['vstyle']=self.v_style
+        out['mstyle']=self.m_style
+        out['estyle']=self.e_style
+        out['mtime']=self.mtime
+        with open(str(self.hash)+'.pkl', 'wb') as output:
+            pickle.dump(out, output, pickle.HIGHEST_PROTOCOL)
+            
     def get_random_entry(self,single=False):
         if single:
             mask = [i.played for i in self.dlist]
@@ -67,6 +91,30 @@ class media_database:
         
     
     def fill(self,d,ty='unknown'):
+        self.dlist = self.find_media_entries(d,ty)
+        saved = False
+    
+    def update(self,d,ty='unknown'):
+        inlist = self.find_media_entries(d,ty)
+        curlist = list(self.dlist)
+        for i in inlist:
+            found = False
+            for j in curlist:
+                if i.equal(j):
+                    found = True
+                    curlist.remove(j)
+                    break
+            if not found:
+                self.dlist.append(i)
+        
+        if len(curlist) > 0:
+            for i in curlist:
+                self.dlist.remove(i)
+        
+        self.saved = False
+        
+    def find_media_entries(self,d,ty):
+        res = []
         for i in os.listdir(d):
             path = d + '/' + i 
             if ty == 'unknown':
@@ -85,8 +133,8 @@ class media_database:
             else:
                 new_entry = media_entry(path)
 
-            self.dlist.append(new_entry)
-        saved = False
+            res.append(new_entry)
+        return res
         
     def determine_media_type(self,i):
         """

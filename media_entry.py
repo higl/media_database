@@ -88,7 +88,9 @@ class media_entry:
         elif self.style == 'random':
             return random.choice(self.filepath)
             
-            
+    def equal(self,m):
+        return m.get_hash == self.get_hash
+        
     def find_first(self,path):
         print 'found'
     def find_last(self,path):

@@ -13,8 +13,8 @@ import threading
 class Application(tk.Frame):
     media_database = None
     history = []
-    historyFrameActive = False
     last = None
+    historyWindow = None
     
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
@@ -106,8 +106,8 @@ class Application(tk.Frame):
     def randomFile(self,event):
         self.last = self.media_database.get_random_entry(single=self.singleMode.get())
         self.history.append(self.last)  
-        if self.historyFrameActive:
-            self.historyFrame.append(self.last)
+        if self.historyWindow != None:
+            self.historyWindow.fillBox()
         t = threading.Thread(target=self.last.execute,kwargs={'singleMode':self.singleMode.get()})
         t.setDaemon(True)
         t.start() 
@@ -118,7 +118,15 @@ class Application(tk.Frame):
         #     singleclick -> infobox )
         #     rightclick -> dropdown with "add Tag or modify or something like that" 
         # )
-        historyFrameActive = True
+        #\\TODO: the close button in historyWindow does not set historyWindow = None -> reopeneing takes 2 klicks on history ... one can check if a window was destroyed with 
+        #if 'normal' == window.state()
+        if self.historyWindow != None:
+            self.historyWindow.destroy()
+            self.historyWindow = None
+        else:
+            self.historyWindow = HistoryFrame(self,self.history)
+            self.after(50,self.checkHistoryWindow)
+            
         
     def displaySelection(self,event):
         args = self.selector.getArgs()
@@ -126,8 +134,16 @@ class Application(tk.Frame):
         self.dataBase.delete(0,tk.END)
         for i in self.media_database.get_selection(args):
             self.dataBase.insert(tk.END,item)
-        
-       
+    
+    def checkHistoryWindow(self):
+        try:
+            if self.historyWindow != None:
+                self.historyWindow.state()
+                self.after(50,self.checkHistoryWindow)
+        except tk.TclError:
+            self.historyWindow = None
+    
+
         
         
 class SelectorFrame(tk.Frame):
@@ -181,8 +197,30 @@ class InfoFrame(tk.Frame):
         self.applyButton = tk.Button(self,text='Show Infopage')
         self.applyButton.grid(row=4,column=0,columnspan=2)
 
-
-
+class HistoryFrame(tk.Toplevel):
+    def __init__(self,master,history,*args,**kwargs):
+        tk.Toplevel.__init__(self,master=master,*args,**kwargs)
+        self.history = history
+        self.grid()
+        self.createWidgets()
+        self.fillBox()
+        
+    def createWidgets(self):
+        self.historyList = tk.Listbox(self)
+        self.historyList.grid(row=0,column=0,rowspan=20,columnspan=3)
+        self.closeButton = tk.Button(self,text='close')
+        self.closeButton.grid(row=21,column=1)
+        self.closeButton.bind("<Button-1>", self.close)
+    
+    def close(self,event):
+        self.destroy()
+        
+    def fillBox(self):
+        self.historyList.delete(0,tk.END)
+        for i in self.history:
+            self.historyList.insert(tk.END,i.get_display_string())
+            
+        
 master = tk.Tk()
 app = Application()
 app.master.title('Sample application')
