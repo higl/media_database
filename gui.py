@@ -15,6 +15,7 @@ class Application(tk.Frame):
     history = []
     last = None
     historyWindow = None
+    infoWindow = None
     
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
@@ -67,7 +68,7 @@ class Application(tk.Frame):
         self.randomButton.bind("<Button-1>", self.randomFile) 
         self.historyButton.bind("<Button-1>", self.displayHistory) 
         self.selector.applyButton.bind("<Button-1>", self.displaySelection)
-        #self.dataBase.bind(
+        self.dataBase.bind("<Double-Button-1>", self.displayInfo)
         #self.pack()    
         
     def load(self,event):
@@ -127,14 +128,28 @@ class Application(tk.Frame):
             self.historyWindow = HistoryFrame(self,self.history)
             self.after(50,self.checkHistoryWindow)
             
-        
+    def displayInfo(self,event):
+        w = event.widget
+        s = w.curselection()
+        value = w.get(s[0])
+        e = self.media_database.find_entry(value)
+        if self.infoWindow != None:
+            self.checkInfoStatus(cont=False)
+            self.infoWindow.updateWindow(e)
+        else:
+            self.infoWindow = InfoWindow(self,e)
+            self.after(50,self.checkInfoStatus)
+            
     def displaySelection(self,event):
+        self.fillSelection()
+     
+    def fillSelection():
         args = self.selector.getArgs()
         
         self.dataBase.delete(0,tk.END)
         for i in self.media_database.get_selection(args):
             self.dataBase.insert(tk.END,item)
-    
+            
     def checkHistoryWindow(self):
         try:
             if self.historyWindow != None:
@@ -144,7 +159,26 @@ class Application(tk.Frame):
             self.historyWindow = None
     
 
-        
+    def checkInfoStatus(self,cont=True):
+        try:
+            self.infoWindow.state()
+            s = self.infoWindow.checkStatus()
+            if s == 'normal':
+                pass 
+            elif s == 'update':
+                self.media_database.saved = False
+                self.infoWindow.status = 'normal'
+            elif s == 'deleted':
+                self.media_database.delete_entry(self.infoWindow.entry)
+                self.infoWindow.destroy()
+                self.infoWindow = None
+                self.fillSelection()
+                cont = False
+            if cont:
+                self.after(50,self.checkInfoStatus)
+        except tk.TclError:
+            self.infoWindow = None
+  
         
 class SelectorFrame(tk.Frame):
     def __init__(self,master=None):
@@ -219,7 +253,214 @@ class HistoryFrame(tk.Toplevel):
         self.historyList.delete(0,tk.END)
         for i in self.history:
             self.historyList.insert(tk.END,i.get_display_string())
+
+class InfoWindow(tk.Toplevel):
+    status = 'normal'
+    
+    def __init__(self,master,entry,*args,**kwargs):
+        tk.Toplevel.__init__(self,master=master,*args,**kwargs)
+        self.status = 'normal'
+        self.entry = entry
+        self.grid()
+        self.createWidgets()
+        self.fillInfo()
+        
+    def createWidgets(self):
+        self.historyList = tk.Listbox(self)
+        self.historyList.grid(row=0,column=0,rowspan=20,columnspan=3)
+        self.closeButton = tk.Button(self,text='close')
+        self.closeButton.grid(row=21,column=1)
+        self.closeButton.bind("<Button-1>", self.close)
+    
+    def close(self,event):
+        self.destroy()
+        
+    def fillInfo(self):
+        self.clearWindow()
+        case = {
+            'video' : self.fillVideo ,
+            'music' : self.fillMusic ,
+            'picture' : self.fillPicture
+        }
+        case[self.entry.type]()
+
+    def fillVideo(self):
+        self.playButton = tk.Button(self,text='Play')
+        self.playButton.grid(row=1,column=7)
+        self.playButton.bind("<Button-1>", self.playFile)
+        self.linkButton = tk.Button(self,text='Link')
+        self.linkButton.grid(row=2,column=7)
+        self.linkButton.bind("<Button-1>", self.link)
+        self.updateButton = tk.Button(self,text='update entry')
+        self.updateButton.grid(row=3,column=7)
+        self.updateButton.bind("<Button-1>", self.updateEntry)
+        self.deleteButton = tk.Button(self,text='delete from disk')
+        self.deleteButton.grid(row=4,column=7)
+        self.deleteButton.bind("<Button-1>", self.delete)
+        self.closeButton = tk.Button(self,text='close')
+        self.closeButton.grid(row=5,column=7)
+        self.closeButton.bind("<Button-1>", self.close)
+
+        self.pLabel = tk.Label(self,text='Name: ')
+        self.pLabel.grid(row=1,column=3)
+        self.pEntry = tk.Label(self,text=self.entry.get_display_string())
+        self.pEntry.grid(row=1,column=4)        
+        self.sLabel = tk.Label(self,text='media - type: ')
+        self.sLabel.grid(row=2,column=3)
+        self.sEntry = tk.Entry(self)
+        self.sEntry.insert(0,self.entry.get_type())
+        self.sEntry.grid(row=2,column=4)
+
+        self.aLabel = tk.Label(self,text='Actors: ')
+        self.aLabel.grid(row=3,column=1)
+        aString = ''
+        for i in self.entry.get_actors():
+            aString = aString + ' , ' + i
+        
+        aString = aString.lstrip(' , ')
+        aString = aString.rstrip(' , ')
+        self.aEntry = tk.Entry(self)
+        self.aEntry.insert(0,aString)
+        self.aEntry.grid(row=3,column=2,columnspan=5) 
+
+        self.gLabel = tk.Label(self,text='Genre: ')
+        self.gLabel.grid(row=4,column=1)
+        self.gEntry = tk.Entry(self)
+        self.gEntry.insert(0,self.entry.get_genre())
+        self.gEntry.grid(row=4,column=2) 
+
+        self.tLabel = tk.Label(self,text='Tags: ')
+        self.tLabel.grid(row=5,column=1)
+        tString = ''
+        for i in self.entry.get_tags():
+            tString = tString + ' , ' + i
+        
+        tString = tString.lstrip(' , ')    
+        tString = tString.rstrip(' , ')
+        self.tEntry = tk.Entry(self)
+        self.tEntry.insert(0,tString)
+        self.tEntry.grid(row=5,column=2,columnspan=5) 
+        
+    def fillMusic(self):
+        self.playButton = tk.Button(self,text='Play')
+        self.playButton.grid(row=1,column=7)
+        self.playButton.bind("<Button-1>", self.playFile)
+        self.linkButton = tk.Button(self,text='Link')
+        self.linkButton.grid(row=2,column=7)
+        self.linkButton.bind("<Button-1>", self.link)
+        self.updateButton = tk.Button(self,text='update entry')
+        self.updateButton.grid(row=3,column=7)
+        self.updateButton.bind("<Button-1>", self.updateEntry)
+        self.deleteButton = tk.Button(self,text='delete from disk')
+        self.deleteButton.grid(row=4,column=7)
+        self.deleteButton.bind("<Button-1>", self.delete)
+        self.closeButton = tk.Button(self,text='close')
+        self.closeButton.grid(row=5,column=7)
+        self.closeButton.bind("<Button-1>", self.close)
+
+        self.pLabel = tk.Label(self,text='Name: ')
+        self.pLabel.grid(row=1,column=3)
+        self.pEntry = tk.Label(self,text=self.entry.get_display_string())
+        self.pEntry.grid(row=1,column=4)        
+        self.sLabel = tk.Label(self,text='media - type: ')
+        self.sLabel.grid(row=2,column=3)
+        self.sEntry = tk.Entry(self)
+        self.sEntry.insert(0,self.entry.get_type())
+        self.sEntry.grid(row=2,column=4)
+
+    def fillPicture(self):
+        self.playButton = tk.Button(self,text='Play')
+        self.playButton.grid(row=1,column=7)
+        self.playButton.bind("<Button-1>", self.playFile)
+        self.linkButton = tk.Button(self,text='Link')
+        self.linkButton.grid(row=2,column=7)
+        self.linkButton.bind("<Button-1>", self.link)
+        self.updateButton = tk.Button(self,text='update entry')
+        self.updateButton.grid(row=5,column=7)
+        self.updateButton.bind("<Button-1>", self.updateEntry)
+        self.deleteButton = tk.Button(self,text='delete from disk')
+        self.deleteButton.grid(row=5,column=7)
+        self.deleteButton.bind("<Button-1>", self.delete)
+        self.closeButton = tk.Button(self,text='close')
+        self.closeButton.grid(row=5,column=7)
+        self.closeButton.bind("<Button-1>", self.close)
+
+        self.pLabel = tk.Label(self,text='Name: ')
+        self.pLabel.grid(row=1,column=3)
+        self.pEntry = tk.Label(self,text=self.entry.get_display_string())
+        self.pEntry.grid(row=1,column=4)        
+        self.sLabel = tk.Label(self,text='media - type: ')
+        self.sLabel.grid(row=2,column=3)
+        self.sEntry = tk.Entry(self)
+        self.sEntry.insert(0,self.entry.get_type())
+        self.sEntry.grid(row=2,column=4)
+        
+    def clearWindow(self):
+        list = self.grid_slaves()
+        for l in list:
+            l.destroy()
             
+    def playFile(self,event):
+        t = threading.Thread(target=self.entry.execute)
+        t.setDaemon(True)
+        t.start() 
+
+    def updateWindow(self,entry=None):
+        if entry != None:
+            self.entry = entry
+        self.fillInfo()
+    
+    def updateEntry(self,event):
+        """
+            \\TODO notify the mdb that one entry has been updated and change the saved status
+        """
+        case = {
+            'video' : self.updateVideo ,
+            'music' : self.updateMusic ,
+            'picture' : self.updatePicture
+        }
+        case[self.entry.type]()
+
+        self.status = 'update'
+        
+        
+    def updateVideo(self):
+        aString = self.aEntry.get()
+        actors = aString.split(',')
+        actors = list(map(lambda x: x.lstrip(),actors))
+        actors = list(map(lambda x: x.rstrip(),actors))        
+        self.entry.actors = actors
+        
+        tString = self.tEntry.get()
+        tags = tString.split(',')
+        tags = list(map(lambda x: x.lstrip(),tags))
+        tags = list(map(lambda x: x.rstrip(),tags))
+        self.entry.tags = tags
+
+        gString = self.gEntry.get()
+        self.entry.genre = gString
+        sString = self.sEntry.get()
+        #\TODO some way to change the type of an entry
+        
+        
+    def updateMusic(self):
+        pass
+     
+    def updatePicture(self):
+        pass
+    
+    def delete(self,event):
+        self.entry.delete()
+        self.status = 'deleted'
+        
+    def checkStatus(self):
+        return self.status
+    
+    def close(self,event):
+        self.destroy()
+    
+    def link(self,event):
+        print 'zelda is not link'
         
 master = tk.Tk()
 app = Application()

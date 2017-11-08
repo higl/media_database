@@ -33,8 +33,14 @@ class media_entry:
         self.accepted_format = format
         self.filepath = self._determine_files_(self.path,self.style,self.accepted_format)
         self.hash = hash(self.path)
+    
+    def __eq__(self,other):
+        return self.hash == other.hash
         
     def _determine_files_(self,path,style,format):
+        """
+        \\TODO redo this with the os.walk() function
+        """
         fileList = []        
         folderList = []
         if os.path.isdir(path):
@@ -92,7 +98,7 @@ class media_entry:
         return m.get_hash == self.get_hash
         
     def find_first(self,path):
-        print 'found'
+         'found'
     def find_last(self,path):
         print 'found'        
     def find_random(self,path):
@@ -135,6 +141,18 @@ class media_entry:
         self.played = played
             
     
+    def delete(self):
+        if os.path.isdir(self.path):
+            for root, dirs, files in os.walk(self.path, topdown=False):
+                for name in files:
+                    os.remove(os.path.join(root, name))
+                for name in dirs:
+                    os.rmdir(os.path.join(root, name))
+
+            os.rmdir(self.path)
+        else:
+            os.remove(self.path)
+                
 class video_entry(media_entry):
     tags = []
     actors = []

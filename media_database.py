@@ -227,8 +227,10 @@ class media_database:
 
         
     def delete_entry(self,entry,delete_from_disk=False):
-        if delete_from_disk:
-            self.saved = False    
+        self.dlist.remove(entry)
+        self.saved = False
+        self.mtime = time()
+        
         
     def change_style(self):
         """
@@ -244,9 +246,17 @@ class media_database:
         return l
         
     def get_entry(self,name):
+        # \\TODO is this used?
         hash = hash(name)
         for i in dlist:
             if i.hash() == hash:
                 return i
         
-        raise NotAnEntryError
+        return None
+    
+    def find_entry(self,dstring):
+        for i in self.dlist:
+            if i.get_display_string() == dstring:
+                return i
+        
+        return None
