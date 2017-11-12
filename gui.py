@@ -6,6 +6,7 @@ This is a temporary script file.
 """
 
 import Tkinter as tk
+import tkMessageBox
 import media_database as mdb
 import media_entry as me
 import threading
@@ -50,9 +51,9 @@ class Application(tk.Frame):
         self.linkButton.grid(row=5,column=16)
         self.dataBase = tk.Listbox(self)
         self.dataBase.grid(row=3, column=0, rowspan=9,columnspan=16)
-        self.selector = SelectorFrame()
-        self.selector.grid(row=9,column=16,rowspan=6,columnspan=4)
-        self.infobox = InfoFrame()
+        self.selector = SelectorFrame(master=self)
+        self.selector.grid(row=9,column=16,rowspan=10,columnspan=4)
+        self.infobox = InfoFrame(master=self)
         self.infobox.grid(row=13,column=0,rowspan=3,columnspan=15)
         
     def executeRandom(self):
@@ -69,7 +70,12 @@ class Application(tk.Frame):
         self.historyButton.bind("<Button-1>", self.displayHistory) 
         self.selector.applyButton.bind("<Button-1>", self.displaySelection)
         self.dataBase.bind("<Double-Button-1>", self.displayInfo)
+        self.dataBase.bind("<<ListboxSelect>>",self.updateInfoBox)
         #self.pack()    
+    
+    def updateInfoBox(self,event):
+        e = self.getSelected()
+        self.infobox.update(e)
         
     def load(self,event):
         self.dataBase.insert(tk.END,self.filepath.get())
@@ -95,14 +101,11 @@ class Application(tk.Frame):
             #open dialog with file not found
 
     def deleteFile(self,event):
-        id = self.dataBase.get(tk.ACTIVE)
-        try:
-            entry = self.media_database.get_entry(id)
-            #open dialog to issue warning about deleting file
-            #self.media_database.delete(entry)
-        except:
-            print "error"
-            #open dialog with file not found            
+        e = self.getSelected()
+        if e != None and tkMessageBox.askokcancel("Delete", 
+            "This will erase " + e.get_display_string() + " from the harddisk! Continue?"):
+            e.delete()
+            self.media_database.delete_entry(e)
 
     def randomFile(self,event):
         self.last = self.media_database.get_random_entry(single=self.singleMode.get())
@@ -129,26 +132,40 @@ class Application(tk.Frame):
             self.after(50,self.checkHistoryWindow)
             
     def displayInfo(self,event):
-        w = event.widget
-        s = w.curselection()
-        value = w.get(s[0])
-        e = self.media_database.find_entry(value)
+        e = self.getSelected()
+        if e != None:
+            self.createInfoWindow(e)
+        
+    def getSelected(self):
+        s = self.dataBase.curselection()
+        if len(s) == 0:
+            tkMessageBox.showinfo(
+            "Select File",
+            "Please select an entry"
+            )
+            return None 
+        else:
+            value = self.dataBase.get(s[0])        
+            e = self.media_database.find_entry(value)
+            return e
+            
+    def createInfoWindow(self,e):
         if self.infoWindow != None:
             self.checkInfoStatus(cont=False)
             self.infoWindow.updateWindow(e)
         else:
             self.infoWindow = InfoWindow(self,e)
             self.after(50,self.checkInfoStatus)
-            
+    
     def displaySelection(self,event):
         self.fillSelection()
      
-    def fillSelection():
+    def fillSelection(self):
         args = self.selector.getArgs()
         
         self.dataBase.delete(0,tk.END)
-        for i in self.media_database.get_selection(args):
-            self.dataBase.insert(tk.END,item)
+        for i in self.media_database.get_selection(**args):
+            self.dataBase.insert(tk.END,i)
             
     def checkHistoryWindow(self):
         try:
@@ -193,18 +210,23 @@ class SelectorFrame(tk.Frame):
         self.actorLabel.grid(row=1,column=0)
         self.actorEntry = tk.Entry(self)
         self.actorEntry.grid(row=1,column=1)
-        self.tagLabel = tk.Label(self,text='Actor')
+        self.tagLabel = tk.Label(self,text='Tag')
         self.tagLabel.grid(row=2,column=0)
         self.tagEntry = tk.Entry(self)
         self.tagEntry.grid(row=2,column=1)
-        self.genreLabel = tk.Label(self,text='Actor')
+        self.genreLabel = tk.Label(self,text='Genre')
         self.genreLabel.grid(row=3,column=0)
         self.genreEntry = tk.Entry(self)
         self.genreEntry.grid(row=3,column=1)
-        
         self.applyButton = tk.Button(self,text='Apply Selection')
         self.applyButton.grid(row=4,column=0,columnspan=2)
     
+    def getArgs(self):
+        args = {}
+        args['actors'] = updateString(self.actorEntry.get())
+        args['tags'] = updateString(self.tagEntry.get())
+        args['genre'] = self.genreEntry.get()
+        return args
         
 class InfoFrame(tk.Frame):
     def __init__(self,master=None):
@@ -227,9 +249,22 @@ class InfoFrame(tk.Frame):
         self.genreLabel.grid(row=1,column=2)
         self.genreEntry = tk.Label(self, text='Horror')
         self.genreEntry.grid(row=1,column=3)
+        self.showButton = tk.Button(self,text='Show Infopage')
+        self.showButton.grid(row=4,column=0,columnspan=2)
+        self.showButton.bind("<Button-1>", self.displayInfo)
         
-        self.applyButton = tk.Button(self,text='Show Infopage')
-        self.applyButton.grid(row=4,column=0,columnspan=2)
+    def update(self,e):
+        a = displayString(e.actors)
+        self.actorEntry.config(text=a)
+        t = displayString(e.tags)
+        self.tagEntry.config(text=t)
+        self.genreEntry.config(text=e.genre)
+    
+    def displayInfo(self,event):
+        e = self.master.getSelected()
+        if e != None:
+            self.master.createInfoWindow(e)
+    
 
 class HistoryFrame(tk.Toplevel):
     def __init__(self,master,history,*args,**kwargs):
@@ -242,6 +277,7 @@ class HistoryFrame(tk.Toplevel):
     def createWidgets(self):
         self.historyList = tk.Listbox(self)
         self.historyList.grid(row=0,column=0,rowspan=20,columnspan=3)
+        self.historyList.bind("<Double-Button-1>", self.displayInfo)
         self.closeButton = tk.Button(self,text='close')
         self.closeButton.grid(row=21,column=1)
         self.closeButton.bind("<Button-1>", self.close)
@@ -253,7 +289,22 @@ class HistoryFrame(tk.Toplevel):
         self.historyList.delete(0,tk.END)
         for i in self.history:
             self.historyList.insert(tk.END,i.get_display_string())
-
+    
+    def displayInfo(self,event):
+        s = self.historyList.curselection()
+        if len(s) == 0:
+            tkMessageBox.showinfo(
+            "Select File",
+            "Please select an entry to be deleted"
+            )
+        else:
+            value = self.historyList.get(s[0])       
+            for i in self.history:
+                if i.get_display_string() == value:
+                    self.master.createInfoWindow(i)
+                    return
+        
+    
 class InfoWindow(tk.Toplevel):
     status = 'normal'
     
@@ -313,12 +364,7 @@ class InfoWindow(tk.Toplevel):
 
         self.aLabel = tk.Label(self,text='Actors: ')
         self.aLabel.grid(row=3,column=1)
-        aString = ''
-        for i in self.entry.get_actors():
-            aString = aString + ' , ' + i
-        
-        aString = aString.lstrip(' , ')
-        aString = aString.rstrip(' , ')
+        aString = displayString(self.entry.actors)
         self.aEntry = tk.Entry(self)
         self.aEntry.insert(0,aString)
         self.aEntry.grid(row=3,column=2,columnspan=5) 
@@ -326,17 +372,13 @@ class InfoWindow(tk.Toplevel):
         self.gLabel = tk.Label(self,text='Genre: ')
         self.gLabel.grid(row=4,column=1)
         self.gEntry = tk.Entry(self)
-        self.gEntry.insert(0,self.entry.get_genre())
+        self.gEntry.insert(0,self.entry.genre)
         self.gEntry.grid(row=4,column=2) 
 
         self.tLabel = tk.Label(self,text='Tags: ')
         self.tLabel.grid(row=5,column=1)
-        tString = ''
-        for i in self.entry.get_tags():
-            tString = tString + ' , ' + i
         
-        tString = tString.lstrip(' , ')    
-        tString = tString.rstrip(' , ')
+        tString = displayString(self.entry.tags)
         self.tEntry = tk.Entry(self)
         self.tEntry.insert(0,tString)
         self.tEntry.grid(row=5,column=2,columnspan=5) 
@@ -426,15 +468,11 @@ class InfoWindow(tk.Toplevel):
         
     def updateVideo(self):
         aString = self.aEntry.get()
-        actors = aString.split(',')
-        actors = list(map(lambda x: x.lstrip(),actors))
-        actors = list(map(lambda x: x.rstrip(),actors))        
+        actors = updateString(aString)
         self.entry.actors = actors
         
         tString = self.tEntry.get()
-        tags = tString.split(',')
-        tags = list(map(lambda x: x.lstrip(),tags))
-        tags = list(map(lambda x: x.rstrip(),tags))
+        tags = updateString(tString)
         self.entry.tags = tags
 
         gString = self.gEntry.get()
@@ -461,7 +499,23 @@ class InfoWindow(tk.Toplevel):
     
     def link(self,event):
         print 'zelda is not link'
-        
+
+def updateString(s):
+    s = s.split(',')
+    s = list(map(lambda x: x.lstrip(),s))
+    s = list(map(lambda x: x.rstrip(),s)) 
+    s = filter(lambda x: x != '', s)
+    return s
+
+def displayString(s):
+    tmpstr = ''
+    for i in s:
+        tmpstr = tmpstr + ' , ' + i
+    
+    tmpstr = tmpstr.lstrip(' , ')    
+    tmpstr = tmpstr.rstrip(' , ')
+    return tmpstr
+    
 master = tk.Tk()
 app = Application()
 app.master.title('Sample application')

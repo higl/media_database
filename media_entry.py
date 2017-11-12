@@ -103,7 +103,7 @@ class media_entry:
         print 'found'        
     def find_random(self,path):
         print 'found'
-    def match_selection(self,type=''):
+    def match_selection(self,type='',**args):
         """
         \\TODO make this more general with a dictionary of attributes
         """
@@ -174,22 +174,26 @@ class video_entry(media_entry):
     def get_actors(self):
         return self.actors
     
-    def has_tag(self,tag):
-        tag_str = str(tag)
-        tag_str = tag_str.lower()
-        if tag_str in self.tags.lower():
-            return True
+    def has_tag(self,tags):
+        tags = [i.lower() for i in tags]
+        for i in self.tags:
+            i = i.lower()
+            for j in tags:
+                if j in i:
+                    return True
         else: 
             return False
     
-    def has_actor(self,actor):
+    def has_actor(self,actors):
         """
             \\TODO account for partial matches, e.g. 'Tom Cruise' should be triggered by 'tom' 'cruise' or 'tom cruise'
         """
-        actor_str = str(actor)
-        actor_str = actor_str.lower()
-        if actor_str in self.actor.lower():
-            return True
+        actors = [i.lower() for i in actors]
+        for i in self.actors:
+            i = i.lower()
+            for j in actors:
+                if j in i:
+                    return True
         else: 
             return False    
             
@@ -197,14 +201,14 @@ class video_entry(media_entry):
         genre = str(genre).lower()
         return self.genre.lower() == genre 
         
-    def match_selection(self,type = 'unknown', tags = [], actor = [], genre = ''):
-        if type != 'unknown' and not media_entry.match_selection(type):
+    def match_selection(self,type = 'unknown', tags = [], actors = [], genre = '',**args):
+        if type != 'unknown' and not media_entry.match_selection(type,**args):
             return False
-        elif genre != '' and not is_genre(genre):
+        elif genre != '' and not self.is_genre(genre):
             return False
-        elif len(tags) > 0 and not has_tag(tag):
+        elif len(tags) > 0 and not self.has_tag(tags):
             return False
-        elif len(actor) > 0 and not has_actor(actor):
+        elif len(actors) > 0 and not self.has_actor(actors):
             return False
         else:
             return True
