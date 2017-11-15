@@ -20,6 +20,7 @@ class media_entry:
     type = ''
     hash = ''
     accepted_format = ()
+    attrib = {}
     played = False
     
     """ 
@@ -36,7 +37,8 @@ class media_entry:
     
     def __eq__(self,other):
         return self.hash == other.hash
-        
+   
+    
     def _determine_files_(self,path,style,format):
         """
         \\TODO redo this with the os.walk() function
@@ -72,7 +74,43 @@ class media_entry:
             return [fileList[-1]]
         else:
             return fileList
-
+    
+    def add_attrib(self,**kwargs):
+        """
+            This will save any kwarg to the attrib dictionary of the media_entry.
+            If the attrib entry already exists, it will be skipped.
+        """
+        keys = kwargs.keys()
+        for i in keys:
+            if not self.attrib.has_key(i):
+                if not isinstance(kwargs[i],basestring):
+                    self.attrib[i] = [str(j) for j in kwargs[i]]
+                else:
+                    self.attrib[i] = [kwargs[i]]
+    
+    def update_attrib(self,**kwargs):
+        """
+            This will update any kwarg in the attrib dictionary of the media_entry.
+            If the attrib entry does not exist, it will be skipped.
+        """    
+        keys = kwargs.keys()
+        for i in keys:
+            if self.attrib.has_key(i):
+                if not isinstance(kwargs[i],basestring):
+                    self.attrib[i] = [str(j) for j in kwargs[i]]
+                else:
+                    self.attrib[i] = [kwargs[i]]
+                    
+    def remove_attrib(self,**kwargs):
+        """
+            This will remove any kwarg from the attrib dictionary of the media_entry.
+            If the attrib entry does not exist, it will be skipped.
+        """
+        keys = kwargs.keys()
+        for i in keys:
+            if self.attrib.has_key(i):
+                self.attrib.pop(i)
+            
     def get_path(self):
         return self.path
 
@@ -94,24 +132,39 @@ class media_entry:
         elif self.style == 'random':
             return random.choice(self.filepath)
             
-    def equal(self,m):
-        return m.get_hash == self.get_hash
-        
-    def find_first(self,path):
-         'found'
-    def find_last(self,path):
-        print 'found'        
-    def find_random(self,path):
-        print 'found'
-    def match_selection(self,type='',**args):
+
+    def match_selection(self,type='',style='',case_sensitive=False,**kwargs):
         """
-        \\TODO make this more general with a dictionary of attributes
+        \\TODO check if this works
         """
-        if type == '' or self.type == type:
-            return True
-        else: 
+        if not type == '' and not self.type == type:
             return False
-    
+        elif not style == '' and not self.style == style: 
+            return False
+        
+        keys = kwargs.keys()
+        for i in keys:
+            if self.attrib.has_key(i):
+                if not isinstance(kwargs[i],basestring):
+                    args = kwargs[i]
+                else:
+                    args = [kwargs[i]]
+                    
+                match = [False for j in args]
+                
+                for e,j in enumerate(args):
+                    if case_sensitive:
+                        match[e] = any(j.lower() in k.lower() for k in self.attrib[i])
+                    else:
+                        match[e] = any(j in k for k in self.attrib[i])
+                            
+                if not all(match):
+                    return False
+            else:
+                return False
+        return True
+
+        
     def execute(self,filepath='unknown',singleMode=False):   
         #TODO replace os.system by something safer like subprocess
         
@@ -154,64 +207,14 @@ class media_entry:
             os.remove(self.path)
                 
 class video_entry(media_entry):
-    tags = []
-    actors = []
-    genre = ''
     accepted_video_formats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg')
         
     def __init__(self,path, tags=[], actors=[], genre='unknown',style='first'):
         media_entry.__init__(self,path,type='video',format=self.accepted_video_formats)
-        self.tags = tags
-        self.actors = actors
-        self.genre = genre
+        self.attrib['tags'] = tags
+        self.attrib['actors'] = actors
+        self.attrib['genre'] = [genre]
     
-    def get_genre(self):
-        return self.genre
-    
-    def get_tags(self):
-        return self.tags
-        
-    def get_actors(self):
-        return self.actors
-    
-    def has_tag(self,tags):
-        tags = [i.lower() for i in tags]
-        for i in self.tags:
-            i = i.lower()
-            for j in tags:
-                if j in i:
-                    return True
-        else: 
-            return False
-    
-    def has_actor(self,actors):
-        """
-            \\TODO account for partial matches, e.g. 'Tom Cruise' should be triggered by 'tom' 'cruise' or 'tom cruise'
-        """
-        actors = [i.lower() for i in actors]
-        for i in self.actors:
-            i = i.lower()
-            for j in actors:
-                if j in i:
-                    return True
-        else: 
-            return False    
-            
-    def is_genre(self,genre):
-        genre = str(genre).lower()
-        return self.genre.lower() == genre 
-        
-    def match_selection(self,type = 'unknown', tags = [], actors = [], genre = '',**args):
-        if type != 'unknown' and not media_entry.match_selection(type,**args):
-            return False
-        elif genre != '' and not self.is_genre(genre):
-            return False
-        elif len(tags) > 0 and not self.has_tag(tags):
-            return False
-        elif len(actors) > 0 and not self.has_actor(actors):
-            return False
-        else:
-            return True
     
 class music_entry(media_entry):
     accepted_music_formats = ('.mp3', '.wma', '.flac','.ogg')
@@ -221,45 +224,24 @@ class music_entry(media_entry):
     
     def __init__(self,path, tags=[], artist=[], genre=['unknown'],style='random'):
         media_entry.__init__(self,path,type='music',format=self.accepted_music_formats)
-        self.tags = tags
-        self.artist = artist
-        self.genre = genre
+        self.attrib['tags'] = tags
+        self.attrib['artist'] = artist
+        self.attrib['genre'] = genre
     
-    def get_genre(self):
-        return self.genre
+
     
-    def get_tags(self):
-        return self.tags
-        
-    def get_artist(self):
-        return self.artist
-    
-    def has_tag(self,tag):
-        tag_str = str(tag)
-        tag_str = tag_str.lower()
-        if tag_str in self.tags.lower():
-            return True
-        else: 
-            return False
-    
-    def has_artist(self,artist):
-        """
-            \\TODO account for partial matches, e.g. 'Tom Cruise' should be triggered by 'tom' 'cruise' or 'tom cruise' 
-        """
-        actor_str = str(actor)
-        actor_str = actor_str.lower()
-        if actor_str in self.actor.lower():
-            return True
-        else: 
-            return False    
-            
-    def is_genre(self,genre):
-        genre = str(genre).lower()
-        return self.genre.lower() == genre
     
     
 class picture_entry(media_entry):
     accepted_picture_formats = ('.png', '.jpg', '.jpeg','.tiff','.bmp')   
-
+    
+    def __init__(self,path, tags=[],style='first'):
+        media_entry.__init__(self,path,type='picture',format=self.accepted_picture_formats)
+        self.attrib['tags'] = tags
+    
 class executable_entry(media_entry):
-    accepted_execs = ('.exe','.jar')
+    accepted_exe_formats = ('.exe','.jar')
+    
+    def __init__(self,path, tags=[],style='first'):
+        media_entry.__init__(self,path,type='exec',format=self.accepted_exe_formats)
+        self.attrib['tags'] = tags

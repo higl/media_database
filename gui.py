@@ -11,18 +11,19 @@ import media_database as mdb
 import media_entry as me
 import threading
 
-class Application(tk.Frame):
+class Application(tk.Tk):
     media_database = None
     history = []
     last = None
     historyWindow = None
     infoWindow = None
     
-    def __init__(self,master=None):
-        tk.Frame.__init__(self,master)
+    def __init__(self):
+        tk.Tk.__init__(self)
         self.grid()
         self.createWidgets()
         self.bindActions()
+        self.protocol("WM_DELETE_WINDOW", self.onClose)
         
     def createWidgets(self):
         top = self.winfo_toplevel()
@@ -80,8 +81,10 @@ class Application(tk.Frame):
     def load(self,event):
         self.dataBase.insert(tk.END,self.filepath.get())
         if self.media_database != None and not self.media_database.saved:
-            #open Warning dialog with save option
-            print 'bla'
+            msg = "Current database is not saved yet! \n Do you want to save before loading a new one?"
+            if tkMessageBox.askyesno("Load", msg):
+                self.media_database.save()
+                
         self.media_database = mdb.media_database(self.filepath.get())
         self.dataBase.delete(0,tk.END)
         for i in self.media_database.get_selection():
@@ -195,8 +198,18 @@ class Application(tk.Frame):
                 self.after(50,self.checkInfoStatus)
         except tk.TclError:
             self.infoWindow = None
-  
-        
+
+    def onClose(self):
+        if self.media_database != None and not self.media_database.saved:
+            msg = "Current database is not saved. \n Do you want to save before closing?"    
+            if tkMessageBox.askyesno("Exit", msg):
+                self.media_database.save()
+                self.destroy()
+            else:
+                self.destroy()
+        else:
+            self.destroy()
+    
 class SelectorFrame(tk.Frame):
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
@@ -229,6 +242,9 @@ class SelectorFrame(tk.Frame):
         return args
         
 class InfoFrame(tk.Frame):
+    LabelList = []
+    EntryList = []
+    
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
         self.grid()
@@ -237,34 +253,49 @@ class InfoFrame(tk.Frame):
     def createWidgets(self):
         self.selectorHead = tk.Label(self,text='InfoBox')
         self.selectorHead.grid(row=0,column=0,columnspan=2)
-        self.actorLabel = tk.Label(self,text='Actor: ')
-        self.actorLabel.grid(row=1,column=0)
-        self.actorEntry = tk.Label(self,text='Will Smith')
-        self.actorEntry.grid(row=1,column=1)
-        self.tagLabel = tk.Label(self,text='Tag: ')
-        self.tagLabel.grid(row=2,column=0)
-        self.tagEntry = tk.Label(self,text='good, oscar')
-        self.tagEntry.grid(row=2,column=1)
-        self.genreLabel = tk.Label(self,text='Genre: ')
-        self.genreLabel.grid(row=1,column=2)
-        self.genreEntry = tk.Label(self, text='Horror')
-        self.genreEntry.grid(row=1,column=3)
         self.showButton = tk.Button(self,text='Show Infopage')
         self.showButton.grid(row=4,column=0,columnspan=2)
         self.showButton.bind("<Button-1>", self.displayInfo)
         
+        self.pLabel = tk.Label(self,text='Name: ')
+        self.pLabel.grid(row=1,column=3)
+        self.pEntry = tk.Label(self,text='')
+        self.pEntry.grid(row=1,column=4)        
+        
+        
     def update(self,e):
-        a = displayString(e.actors)
-        self.actorEntry.config(text=a)
-        t = displayString(e.tags)
-        self.tagEntry.config(text=t)
-        self.genreEntry.config(text=e.genre)
+        self.pEntry.config(text=e.get_display_string())
+        self.clearLists()
+        r = 2
+        self.LabelList = []
+        self.EntryList = []
+        
+        for i in e.attrib.keys():
+            nLabel = tk.Label(self,text=i)
+            nLabel.grid(row=r,column=1)
+            self.LabelList.append(nLabel)
+            
+            eString = displayString(e.attrib[i])
+            nEntry = tk.Entry(self)
+            nEntry.insert(0,eString)
+            nEntry.grid(row=r,column=2,columnspan=2)
+            self.EntryList.append(nEntry)
+            r = r+1
+            if r >= 4:
+                break
     
+    def clearLists(self):
+        for l in self.LabelList:
+            l.destroy()
+        for l in self.EntryList:
+            l.destroy()
+                
+        
     def displayInfo(self,event):
         e = self.master.getSelected()
         if e != None:
             self.master.createInfoWindow(e)
-    
+            
 
 class HistoryFrame(tk.Toplevel):
     def __init__(self,master,history,*args,**kwargs):
@@ -327,15 +358,12 @@ class InfoWindow(tk.Toplevel):
         self.destroy()
         
     def fillInfo(self):
+        """
+            \\TODO make the layout depending on the number of attributes 
+                    if there are more than 10 attributes, I would like to have 10 dropdownboxes with all the attributes available ... I guess there will be never more than 10 different attributes updated and if so we should use a different method 
+        """
         self.clearWindow()
-        case = {
-            'video' : self.fillVideo ,
-            'music' : self.fillMusic ,
-            'picture' : self.fillPicture
-        }
-        case[self.entry.type]()
 
-    def fillVideo(self):
         self.playButton = tk.Button(self,text='Play')
         self.playButton.grid(row=1,column=7)
         self.playButton.bind("<Button-1>", self.playFile)
@@ -362,80 +390,21 @@ class InfoWindow(tk.Toplevel):
         self.sEntry.insert(0,self.entry.get_type())
         self.sEntry.grid(row=2,column=4)
 
-        self.aLabel = tk.Label(self,text='Actors: ')
-        self.aLabel.grid(row=3,column=1)
-        aString = displayString(self.entry.actors)
-        self.aEntry = tk.Entry(self)
-        self.aEntry.insert(0,aString)
-        self.aEntry.grid(row=3,column=2,columnspan=5) 
-
-        self.gLabel = tk.Label(self,text='Genre: ')
-        self.gLabel.grid(row=4,column=1)
-        self.gEntry = tk.Entry(self)
-        self.gEntry.insert(0,self.entry.genre)
-        self.gEntry.grid(row=4,column=2) 
-
-        self.tLabel = tk.Label(self,text='Tags: ')
-        self.tLabel.grid(row=5,column=1)
-        
-        tString = displayString(self.entry.tags)
-        self.tEntry = tk.Entry(self)
-        self.tEntry.insert(0,tString)
-        self.tEntry.grid(row=5,column=2,columnspan=5) 
-        
-    def fillMusic(self):
-        self.playButton = tk.Button(self,text='Play')
-        self.playButton.grid(row=1,column=7)
-        self.playButton.bind("<Button-1>", self.playFile)
-        self.linkButton = tk.Button(self,text='Link')
-        self.linkButton.grid(row=2,column=7)
-        self.linkButton.bind("<Button-1>", self.link)
-        self.updateButton = tk.Button(self,text='update entry')
-        self.updateButton.grid(row=3,column=7)
-        self.updateButton.bind("<Button-1>", self.updateEntry)
-        self.deleteButton = tk.Button(self,text='delete from disk')
-        self.deleteButton.grid(row=4,column=7)
-        self.deleteButton.bind("<Button-1>", self.delete)
-        self.closeButton = tk.Button(self,text='close')
-        self.closeButton.grid(row=5,column=7)
-        self.closeButton.bind("<Button-1>", self.close)
-
-        self.pLabel = tk.Label(self,text='Name: ')
-        self.pLabel.grid(row=1,column=3)
-        self.pEntry = tk.Label(self,text=self.entry.get_display_string())
-        self.pEntry.grid(row=1,column=4)        
-        self.sLabel = tk.Label(self,text='media - type: ')
-        self.sLabel.grid(row=2,column=3)
-        self.sEntry = tk.Entry(self)
-        self.sEntry.insert(0,self.entry.get_type())
-        self.sEntry.grid(row=2,column=4)
-
-    def fillPicture(self):
-        self.playButton = tk.Button(self,text='Play')
-        self.playButton.grid(row=1,column=7)
-        self.playButton.bind("<Button-1>", self.playFile)
-        self.linkButton = tk.Button(self,text='Link')
-        self.linkButton.grid(row=2,column=7)
-        self.linkButton.bind("<Button-1>", self.link)
-        self.updateButton = tk.Button(self,text='update entry')
-        self.updateButton.grid(row=5,column=7)
-        self.updateButton.bind("<Button-1>", self.updateEntry)
-        self.deleteButton = tk.Button(self,text='delete from disk')
-        self.deleteButton.grid(row=5,column=7)
-        self.deleteButton.bind("<Button-1>", self.delete)
-        self.closeButton = tk.Button(self,text='close')
-        self.closeButton.grid(row=5,column=7)
-        self.closeButton.bind("<Button-1>", self.close)
-
-        self.pLabel = tk.Label(self,text='Name: ')
-        self.pLabel.grid(row=1,column=3)
-        self.pEntry = tk.Label(self,text=self.entry.get_display_string())
-        self.pEntry.grid(row=1,column=4)        
-        self.sLabel = tk.Label(self,text='media - type: ')
-        self.sLabel.grid(row=2,column=3)
-        self.sEntry = tk.Entry(self)
-        self.sEntry.insert(0,self.entry.get_type())
-        self.sEntry.grid(row=2,column=4)
+        r = 3
+        self.LabelList = []
+        self.EntryList = []
+        for i in self.entry.attrib.keys():
+            nLabel = tk.Label(self,text=i)
+            nLabel.grid(row=r,column=1)
+            self.LabelList.append(nLabel)
+            
+            eString = displayString(self.entry.attrib[i])
+            nEntry = tk.Entry(self)
+            nEntry.insert(0,eString)
+            nEntry.grid(row=r,column=2,columnspan=5)
+            self.EntryList.append(nEntry)
+            r = r+1
+            
         
     def clearWindow(self):
         list = self.grid_slaves()
@@ -454,38 +423,16 @@ class InfoWindow(tk.Toplevel):
     
     def updateEntry(self,event):
         """
-            \\TODO notify the mdb that one entry has been updated and change the saved status
         """
-        case = {
-            'video' : self.updateVideo ,
-            'music' : self.updateMusic ,
-            'picture' : self.updatePicture
-        }
-        case[self.entry.type]()
-
+        attrib = {}
+        for e,i in enumerate(self.LabelList):
+            uString = self.EntryList[e].get()
+            uString = updateString(uString)
+            attrib[i.cget('text')] = uString
+        
+        self.entry.update_attrib(**attrib)
         self.status = 'update'
         
-        
-    def updateVideo(self):
-        aString = self.aEntry.get()
-        actors = updateString(aString)
-        self.entry.actors = actors
-        
-        tString = self.tEntry.get()
-        tags = updateString(tString)
-        self.entry.tags = tags
-
-        gString = self.gEntry.get()
-        self.entry.genre = gString
-        sString = self.sEntry.get()
-        #\TODO some way to change the type of an entry
-        
-        
-    def updateMusic(self):
-        pass
-     
-    def updatePicture(self):
-        pass
     
     def delete(self,event):
         self.entry.delete()
@@ -501,11 +448,11 @@ class InfoWindow(tk.Toplevel):
         print 'zelda is not link'
 
 def updateString(s):
-    s = s.split(',')
-    s = list(map(lambda x: x.lstrip(),s))
-    s = list(map(lambda x: x.rstrip(),s)) 
-    s = filter(lambda x: x != '', s)
-    return s
+    tmpstr = s.split(',')
+    tmpstr = list(map(lambda x: x.lstrip(),tmpstr))
+    tmpstr = list(map(lambda x: x.rstrip(),tmpstr)) 
+    tmpstr = filter(lambda x: x != '', tmpstr)
+    return tmpstr
 
 def displayString(s):
     tmpstr = ''
@@ -516,8 +463,8 @@ def displayString(s):
     tmpstr = tmpstr.rstrip(' , ')
     return tmpstr
     
-master = tk.Tk()
-app = Application()
-app.master.title('Sample application')
 
-master.mainloop()
+app = Application()
+app.title('Sample application')
+
+app.mainloop()

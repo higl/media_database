@@ -100,7 +100,7 @@ class media_database:
         for i in inlist:
             found = False
             for j in curlist:
-                if i.equal(j):
+                if i == j:
                     found = True
                     curlist.remove(j)
                     break
@@ -145,6 +145,8 @@ class media_database:
                 executable - video - music - picture 
                 
             if no media type is found it will return 'unknown'
+            
+            \\TODO redo with os.walk
         """
         accepted_video_formats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg')
         accepted_music_formats = ('.mp3', '.wma', '.flac','.ogg')
@@ -183,7 +185,7 @@ class media_database:
             folderList.pop(0)
 
         if ex:
-            return 'executable'
+            return 'exec'
         elif video:
             return 'video'
         elif music:
