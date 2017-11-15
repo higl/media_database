@@ -20,16 +20,7 @@ class media_database:
     import os
     import pickle
     #//TODO convert strings into raw strings
-    parent = ''
-    hash = ''
     #//TODO make dlist a numpy array and then use the masking function for the reduced "unplayed" list in get_random_entry
-    dlist = []
-    p_style = ''
-    v_style = ''
-    m_style = ''
-    e_style = ''
-
-    saved = False
     
     
     def __init__(self,d,p_style = 'first',v_style = 'random',m_style = 'random',e_style = 'first'):
@@ -48,6 +39,7 @@ class media_database:
         self.v_style = v_style
         self.m_style = m_style
         self.e_style = e_style
+        self.dlist = []
         self.fill(d)
         self.mtime = time()
         self.saved = False

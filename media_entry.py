@@ -14,14 +14,6 @@ else:
         return ' '.join(quote(arg) for arg in seq)
         
 class media_entry:
-    path = ''
-    filepath = []
-    style = ''
-    type = ''
-    hash = ''
-    accepted_format = ()
-    attrib = {}
-    played = False
     
     """ 
         //TODO move attributes to a dictionary ?
@@ -34,6 +26,7 @@ class media_entry:
         self.accepted_format = format
         self.filepath = self._determine_files_(self.path,self.style,self.accepted_format)
         self.hash = hash(self.path)
+        self.attrib = {}
     
     def __eq__(self,other):
         return self.hash == other.hash
@@ -218,19 +211,13 @@ class video_entry(media_entry):
     
 class music_entry(media_entry):
     accepted_music_formats = ('.mp3', '.wma', '.flac','.ogg')
-    tags = []
-    artist = []
-    genre = []
     
     def __init__(self,path, tags=[], artist=[], genre=['unknown'],style='random'):
         media_entry.__init__(self,path,type='music',format=self.accepted_music_formats)
         self.attrib['tags'] = tags
         self.attrib['artist'] = artist
         self.attrib['genre'] = genre
-    
-
-    
-    
+        
     
 class picture_entry(media_entry):
     accepted_picture_formats = ('.png', '.jpg', '.jpeg','.tiff','.bmp')   
@@ -238,6 +225,7 @@ class picture_entry(media_entry):
     def __init__(self,path, tags=[],style='first'):
         media_entry.__init__(self,path,type='picture',format=self.accepted_picture_formats)
         self.attrib['tags'] = tags
+    
     
 class executable_entry(media_entry):
     accepted_exe_formats = ('.exe','.jar')

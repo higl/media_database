@@ -12,14 +12,14 @@ import media_entry as me
 import threading
 
 class Application(tk.Tk):
-    media_database = None
-    history = []
-    last = None
-    historyWindow = None
-    infoWindow = None
     
     def __init__(self):
         tk.Tk.__init__(self)
+        self.last = None
+        self.historyWindow = None
+        self.infoWindow = None
+        self.history = []
+        self.media_database = None
         self.grid()
         self.createWidgets()
         self.bindActions()
@@ -242,11 +242,11 @@ class SelectorFrame(tk.Frame):
         return args
         
 class InfoFrame(tk.Frame):
-    LabelList = []
-    EntryList = []
-    
+  
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
+        self.LabelList = []
+        self. EntryList = [] 
         self.grid()
         self.createWidgets()
         
@@ -337,7 +337,6 @@ class HistoryFrame(tk.Toplevel):
         
     
 class InfoWindow(tk.Toplevel):
-    status = 'normal'
     
     def __init__(self,master,entry,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
