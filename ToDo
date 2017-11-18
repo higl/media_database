@@ -1,0 +1,15 @@
+- make windows scalable
+- fix entry length (= make layout constant)
+- scrollbars
+- threading for all database functions (queueing + find out how many threads a system likes)
+- comments
+- dropdown menues for attributes in InfoWindow / InfoFrame / SelectorFrame
+- define and implement naming convention
+- put all possible attributes in a list of the database (+ count how many elements support that attribute) -> communication between database and entries needed in case of changes to an entry
+- implement some advanced search functions like AND and OR
+
+Future improvements:
+- Image viewer 
+- Video player
+- read meta data and use as attributes
+

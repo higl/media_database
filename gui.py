@@ -26,42 +26,56 @@ class Application(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.onClose)
         
     def createWidgets(self):
-        top = self.winfo_toplevel()
-        # for i in range(0,50):
-            # top.rowconfigure(i,weight=1)
-            # top.columnconfigure(i,weight=1)
-   #     self.quitButton = tk.Button(self, text='Quit',command=self.quit)
-    #    self.quitButton.grid(column=1,columnspan=3)
+        for i in range(0,50):
+            self.rowconfigure(i,weight=1)
+            self.columnconfigure(i,weight=1)
         
+        
+        options = {'sticky':'NSEW','padx':3,'pady':3}
+        
+        inputr = 0
+        inputc = 0
+        #input section
         self.filepath = tk.Entry(self)
-        self.filepath.grid(row=2,column=0,columnspan=15)
+        self.filepath.grid(row=inputr+0,column=inputc+0,columnspan=15,**options)
         self.loadButton = tk.Button(self,text='Load')
-        self.loadButton.grid(row=2,column=15)
+        self.loadButton.grid(row=inputr+0,column=inputc+15,**options)
         self.saveButton = tk.Button(self,text='Save')
-        self.saveButton.grid(row=2,column=16)
+        self.saveButton.grid(row=inputr+0,column=inputc+17,**options)
+        
+        toolr = 1
+        toolc = 17
+        #tool section
         self.randomButton = tk.Button(self, text='Random')
-        self.randomButton.grid(row=3,column=16)
+        self.randomButton.grid(row=toolr+0,column=toolc+0,**options)
+        self.deleteButton = tk.Button(self, text='Delete')
+        self.deleteButton.grid(row=toolr+1,column=toolc+0,**options)
+        self.historyButton = tk.Button(self, text='History')
+        self.historyButton.grid(row=toolr+2,column=toolc+0,**options)
+        self.linkButton = tk.Button(self, text='Link')
+        self.linkButton.grid(row=toolr+3,column=toolc+0,**options)
         self.singleMode = tk.IntVar()
         self.singleBox = tk.Checkbutton(self,text='single',variable=self.singleMode)
-        self.singleBox.grid(row=3,column=17)
-        self.deleteButton = tk.Button(self, text='Delete')
-        self.deleteButton.grid(row=4,column=16)
-        self.historyButton = tk.Button(self, text='History')
-        self.historyButton.grid(row=6,column=16)
-        self.linkButton = tk.Button(self, text='Link')
-        self.linkButton.grid(row=5,column=16)
-        self.dataBase = tk.Listbox(self)
-        self.dataBase.grid(row=3, column=0, rowspan=9,columnspan=16)
-        self.selector = SelectorFrame(master=self)
-        self.selector.grid(row=9,column=16,rowspan=10,columnspan=4)
-        self.infobox = InfoFrame(master=self)
-        self.infobox.grid(row=13,column=0,rowspan=3,columnspan=15)
+        self.singleBox.grid(row=toolr+4,column=toolc+0,**options)
         
-    def executeRandom(self):
-        self.labelah = tk.Label(self, text='aaaaah')
-        self.labelah.grid(row=3)
-        print('aaaaah')
-    
+        dbr = 1
+        dbc = 0
+        #database        
+        self.dataBase = tk.Listbox(self)
+        self.dataBase.grid(row=dbr+0, column=dbc+0, rowspan=9,columnspan=16,**options)
+        scrollbar = tk.Scrollbar()
+        scrollbar.grid(row=dbr+0,column=dbc+16,rowspan=9)
+        scrollbar.config(command=self.dataBase.yview)
+        
+        btoolr = 10
+        btoolc = 0
+        #2. tool section below database        
+        self.infobox = InfoFrame(master=self)
+        self.infobox.grid(row=btoolr+0,column=btoolc+0,rowspan=6,columnspan=12,**options)
+        
+        self.selector = SelectorFrame(master=self)
+        self.selector.grid(row=btoolr+0,column=btoolc+12,rowspan=6,columnspan=6,**options)
+
     def bindActions(self):
         self.loadButton.bind("<Button-1>", self.load)
         self.saveButton.bind("<Button-1>", self.save)
@@ -72,11 +86,10 @@ class Application(tk.Tk):
         self.selector.applyButton.bind("<Button-1>", self.displaySelection)
         self.dataBase.bind("<Double-Button-1>", self.displayInfo)
         self.dataBase.bind("<<ListboxSelect>>",self.updateInfoBox)
-        #self.pack()    
-    
+        
     def updateInfoBox(self,event):
         e = self.getSelected()
-        self.infobox.update(e)
+        self.infobox.update(entry=e)
         
     def load(self,event):
         self.dataBase.insert(tk.END,self.filepath.get())
@@ -217,22 +230,30 @@ class SelectorFrame(tk.Frame):
         self.createWidgets()
         
     def createWidgets(self):
+        options = {'sticky':'NSEW','padx':3,'pady':3}
+        attribs = ['Actor','Tag','Genre','Type']        
         self.selectorHead = tk.Label(self,text='Selection')
-        self.selectorHead.grid(row=0,column=0,columnspan=2)
+        self.selectorHead.grid(row=0,column=0,columnspan=2,**options)
         self.actorLabel = tk.Label(self,text='Actor')
-        self.actorLabel.grid(row=1,column=0)
+        self.actorLabel.grid(row=1,column=0,**options)
         self.actorEntry = tk.Entry(self)
-        self.actorEntry.grid(row=1,column=1)
+        self.actorEntry.grid(row=1,column=1,**options)
         self.tagLabel = tk.Label(self,text='Tag')
-        self.tagLabel.grid(row=2,column=0)
+        self.tagLabel.grid(row=2,column=0,**options)
         self.tagEntry = tk.Entry(self)
-        self.tagEntry.grid(row=2,column=1)
+        self.tagEntry.grid(row=2,column=1,**options)
         self.genreLabel = tk.Label(self,text='Genre')
-        self.genreLabel.grid(row=3,column=0)
+        self.genreLabel.grid(row=3,column=0,**options)
         self.genreEntry = tk.Entry(self)
-        self.genreEntry.grid(row=3,column=1)
+        self.genreEntry.grid(row=3,column=1,**options)
+        self.newVar = tk.StringVar(self)
+        self.newVar.set(attribs[0])
+        self.newLabel = tk.OptionMenu(self,self.newVar,*attribs)
+        self.newLabel.grid(row=4,column=0,**options)
+        self.newEntry = tk.Entry(self)
+        self.newEntry.grid(row=4,column=1,**options)
         self.applyButton = tk.Button(self,text='Apply Selection')
-        self.applyButton.grid(row=4,column=0,columnspan=2)
+        self.applyButton.grid(row=5,column=0,columnspan=2,**options)
     
     def getArgs(self):
         args = {}
@@ -246,44 +267,83 @@ class InfoFrame(tk.Frame):
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
         self.LabelList = []
-        self. EntryList = [] 
+        self.EntryList = [] 
         self.grid()
         self.createWidgets()
+        self.update()
         
     def createWidgets(self):
+        options = {'sticky':'NSEW','padx':3,'pady':3}        
         self.selectorHead = tk.Label(self,text='InfoBox')
-        self.selectorHead.grid(row=0,column=0,columnspan=2)
+        self.selectorHead.grid(row=0,column=0,columnspan=2,**options)
         self.showButton = tk.Button(self,text='Show Infopage')
-        self.showButton.grid(row=4,column=0,columnspan=2)
+        self.showButton.grid(row=6,column=0,columnspan=2,**options)
         self.showButton.bind("<Button-1>", self.displayInfo)
         
         self.pLabel = tk.Label(self,text='Name: ')
-        self.pLabel.grid(row=1,column=3)
+        self.pLabel.grid(row=1,column=0,**options)
         self.pEntry = tk.Label(self,text='')
-        self.pEntry.grid(row=1,column=4)        
+        self.pEntry.grid(row=1,column=1,**options)        
         
         
-    def update(self,e):
-        self.pEntry.config(text=e.get_display_string())
-        self.clearLists()
-        r = 2
-        self.LabelList = []
-        self.EntryList = []
-        
-        for i in e.attrib.keys():
-            nLabel = tk.Label(self,text=i)
-            nLabel.grid(row=r,column=1)
-            self.LabelList.append(nLabel)
+    def update(self,entry=None):
+        options = {'sticky':'NSEW','padx':3,'pady':3}         
+        if entry == None:
+            #create an empty entry that fills all the space we might need
+            r = 2
+            for i in range(3):
+                nLabel = tk.Label(self,text='Info '+str(2*i+1))
+                nLabel.grid(row=r,column=0)
+                self.LabelList.append(nLabel)
+                
+                nEntry = tk.Entry(self)
+                nEntry.grid(row=r,column=1,columnspan=5,**options)
+                self.EntryList.append(nEntry)
+
+
+                nLabel = tk.Label(self,text='Info '+str(2*i+2))
+                nLabel.grid(row=r,column=7)
+                self.LabelList.append(nLabel)
+                
+                nEntry = tk.Entry(self)
+                nEntry.grid(row=r,column=8,columnspan=5,**options)
+                self.EntryList.append(nEntry)
+
+                r = r+1
+                if r > 4:
+                    break
+        else:
+            e = entry           
+            self.pEntry.config(text=e.get_display_string())
+            self.clearLists()
+            self.LabelList = []
+            self.EntryList = []
             
-            eString = displayString(e.attrib[i])
-            nEntry = tk.Entry(self)
-            nEntry.insert(0,eString)
-            nEntry.grid(row=r,column=2,columnspan=2)
-            self.EntryList.append(nEntry)
-            r = r+1
-            if r >= 4:
-                break
-    
+            nentry = len(e.attrib.keys())
+            if nentry <= 6:
+                r = 2
+                c = 0                        
+                for i in e.attrib.keys():
+                    nLabel = tk.Label(self,text=i)
+                    nLabel.grid(row=r,column=c)
+                    self.LabelList.append(nLabel)
+                    
+                    eString = displayString(e.attrib[i])
+                    nEntry = tk.Entry(self)
+                    nEntry.insert(0,eString)
+                    nEntry.grid(row=r,column=c+1,columnspan=5,**options)
+                    self.EntryList.append(nEntry)
+                    r = r+1
+                    if r > 4:
+                        r = 2
+                        c = c+6
+                        if c >= 12:
+                            break
+            else:
+                #here make dropdownmenues instat of labels and bind and updatentry to it 
+                print 'please implement me'
+
+
     def clearLists(self):
         for l in self.LabelList:
             l.destroy()
@@ -465,5 +525,8 @@ def displayString(s):
 
 app = Application()
 app.title('Sample application')
+app.grid_columnconfigure(0,weight=1)
+app.grid_rowconfigure(0,weight=1)
+app.resizable(True,True)
 
 app.mainloop()
