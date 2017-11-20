@@ -40,6 +40,7 @@ class media_database:
         self.m_style = m_style
         self.e_style = e_style
         self.dlist = []
+        self.alist = {}
         self.fill(d)
         self.mtime = time()
         self.saved = False
@@ -49,6 +50,7 @@ class media_database:
         with open(d, 'rb') as input:
             db = pickle.load(input)
             self.dlist = db['dlist']
+            self.alist = db['alist']
             self.p_style = db['pstyle']
             self.m_style = db['mstyle']
             self.v_style = db['vstyle']
@@ -60,6 +62,7 @@ class media_database:
         self.saved = True
         out = {}
         out['dlist']=self.dlist
+        out['alist']=self.alist
         out['pstyle']=self.p_style
         out['vstyle']=self.v_style
         out['mstyle']=self.m_style
@@ -84,6 +87,12 @@ class media_database:
     
     def fill(self,d,ty='unknown'):
         self.dlist = self.find_media_entries(d,ty)
+        for d in self.dlist:
+            for a in d.attrib.keys():
+                if not a in self.alist:
+                    self.alist[a] = 1
+                else:
+                    self.alist[a] = self.alist[a] + 1
         saved = False
     
     def update(self,d,ty='unknown'):
@@ -97,11 +106,11 @@ class media_database:
                     curlist.remove(j)
                     break
             if not found:
-                self.dlist.append(i)
-        
+                self.add_entry(i)
+                
         if len(curlist) > 0:
             for i in curlist:
-                self.dlist.remove(i)
+                self.delete_entry(i)
         
         self.saved = False
         
@@ -217,11 +226,22 @@ class media_database:
 
         self.dlist.append(new_entry)
 
+        for a in new_entry.attrib.keys():
+            if not a in self.alist:
+                self.alist[a] = 1
+            else:
+                self.alist[a] = self.alist[a] + 1
+        
         self.saved = False
 
         
     def delete_entry(self,entry,delete_from_disk=False):
         self.dlist.remove(entry)
+        for a in entry.attrib.keys():
+            self.alist[a] = self.alist[a] - 1
+            if self.alist[a] <= 0:
+                self.alist.pop(a)
+        
         self.saved = False
         self.mtime = time()
         

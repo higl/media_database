@@ -29,8 +29,13 @@ class media_entry:
         self.attrib = {}
     
     def __eq__(self,other):
-        return self.hash == other.hash
-   
+        if type(other) is type(self):
+            return self.hash == other.hash
+        else: 
+            return False
+    
+    def __ne__(self,other):
+        return not self.__eq__(other)
     
     def _determine_files_(self,path,style,format):
         """

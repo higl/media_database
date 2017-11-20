@@ -102,7 +102,8 @@ class Application(tk.Tk):
         self.dataBase.delete(0,tk.END)
         for i in self.media_database.get_selection():
             self.dataBase.insert(tk.END,i)
-    
+        self.selector.update()
+        
     def save(self,event):
         self.media_database.save()
         
@@ -227,40 +228,74 @@ class SelectorFrame(tk.Frame):
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
         self.grid()
+        if master == None or master.media_database == None:
+            self.attribs = ['attribute 1','attribute 2','attribute 3','attribute 4']
+        else:
+            self.attribs = self.master.media_database.alist.keys()
+            self.attribs.append('-')
+            if len(self.attribs) < 4:
+                att = ['-','-','-','-']
+                att[:len(self.attribs)-1] = self.attribs[:]
+                
+        self.LabelList = []
+        self.EntryList = []
+        self.VarList = []
         self.createWidgets()
         
     def createWidgets(self):
         options = {'sticky':'NSEW','padx':3,'pady':3}
-        attribs = ['Actor','Tag','Genre','Type']        
         self.selectorHead = tk.Label(self,text='Selection')
         self.selectorHead.grid(row=0,column=0,columnspan=2,**options)
-        self.actorLabel = tk.Label(self,text='Actor')
-        self.actorLabel.grid(row=1,column=0,**options)
-        self.actorEntry = tk.Entry(self)
-        self.actorEntry.grid(row=1,column=1,**options)
-        self.tagLabel = tk.Label(self,text='Tag')
-        self.tagLabel.grid(row=2,column=0,**options)
-        self.tagEntry = tk.Entry(self)
-        self.tagEntry.grid(row=2,column=1,**options)
-        self.genreLabel = tk.Label(self,text='Genre')
-        self.genreLabel.grid(row=3,column=0,**options)
-        self.genreEntry = tk.Entry(self)
-        self.genreEntry.grid(row=3,column=1,**options)
-        self.newVar = tk.StringVar(self)
-        self.newVar.set(attribs[0])
-        self.newLabel = tk.OptionMenu(self,self.newVar,*attribs)
-        self.newLabel.grid(row=4,column=0,**options)
-        self.newEntry = tk.Entry(self)
-        self.newEntry.grid(row=4,column=1,**options)
         self.applyButton = tk.Button(self,text='Apply Selection')
         self.applyButton.grid(row=5,column=0,columnspan=2,**options)
-    
+        self.createSelectors()
+        
+    def createSelectors(self):
+        options = {'sticky':'NSEW','padx':3,'pady':3}
+        for i in range(4):            
+            newVar = tk.StringVar(self)
+            newVar.set(self.attribs[i])
+            newLabel = tk.OptionMenu(self,newVar,*self.attribs)
+            newLabel.grid(row=i+1,column=0,**options)
+            newEntry = tk.Entry(self)
+            newEntry.grid(row=i+1,column=1,**options)
+            self.LabelList.append(newLabel)
+            self.EntryList.append(newEntry)
+            self.VarList.append(newVar)
+        
     def getArgs(self):
         args = {}
-        args['actors'] = updateString(self.actorEntry.get())
-        args['tags'] = updateString(self.tagEntry.get())
-        args['genre'] = self.genreEntry.get()
+        for e,i in enumerate(self.LabelList):
+            var = self.VarList[e].get()
+            uString = self.EntryList[e].get()
+            uString = updateString(uString)
+            if var == '-' or len(uString) == 0:
+                continue
+            args[self.VarList[e].get()] = uString
+        print args
         return args
+    
+    def update(self):
+        self.clearLists()
+        if self.master == None or self.master.media_database == None:
+            self.attribs = ['attribute 1','attribute 2','attribute 3','attribute 4']
+        else:    
+            self.attribs = self.master.media_database.alist.keys()
+            self.attribs.append('-')
+            if len(self.attribs) < 4:
+                att = ['-','-','-','-']
+                att[:len(self.attribs)-1] = self.attribs[:]
+                
+        self.LabelList = []
+        self.EntryList = []
+        self.VarList = []
+        self.createSelectors()
+
+    def clearLists(self):
+        for l in self.LabelList:
+            l.destroy()
+        for l in self.EntryList:
+            l.destroy()
         
 class InfoFrame(tk.Frame):
   

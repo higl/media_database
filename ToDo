@@ -7,6 +7,7 @@
 - define and implement naming convention
 - put all possible attributes in a list of the database (+ count how many elements support that attribute) -> communication between database and entries needed in case of changes to an entry
 - implement some advanced search functions like AND and OR
+- clean up input string in load entry ... remove leading /n and ending spaces 
 
 Future improvements:
 - Image viewer 
