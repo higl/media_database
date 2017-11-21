@@ -64,7 +64,7 @@ class Application(tk.Tk):
         self.dataBase = tk.Listbox(self)
         self.dataBase.grid(row=dbr+0, column=dbc+0, rowspan=9,columnspan=16,**options)
         scrollbar = tk.Scrollbar()
-        scrollbar.grid(row=dbr+0,column=dbc+16,rowspan=9)
+        scrollbar.grid(row=dbr+0,column=dbc+16,rowspan=9,sticky = 'NSW', padx=3)
         scrollbar.config(command=self.dataBase.yview)
         
         btoolr = 10
@@ -126,6 +126,7 @@ class Application(tk.Tk):
 
     def randomFile(self,event):
         self.last = self.media_database.get_random_entry(single=self.singleMode.get())
+        self.infobox.update(entry=self.last)
         self.history.append(self.last)  
         if self.historyWindow != None:
             self.historyWindow.fillBox()
@@ -181,8 +182,11 @@ class Application(tk.Tk):
         args = self.selector.getArgs()
         
         self.dataBase.delete(0,tk.END)
-        for i in self.media_database.get_selection(**args):
-            self.dataBase.insert(tk.END,i)
+        if self.media_database == None:
+            return
+        else
+            for i in self.media_database.get_selection(**args):
+                self.dataBase.insert(tk.END,i)
             
     def checkHistoryWindow(self):
         try:
@@ -303,6 +307,7 @@ class InfoFrame(tk.Frame):
         tk.Frame.__init__(self,master)
         self.LabelList = []
         self.EntryList = [] 
+        self.entry = None
         self.grid()
         self.createWidgets()
         self.update()
@@ -323,6 +328,7 @@ class InfoFrame(tk.Frame):
         
     def update(self,entry=None):
         options = {'sticky':'NSEW','padx':3,'pady':3}         
+        self.entry = entry
         if entry == None:
             #create an empty entry that fills all the space we might need
             r = 2
@@ -376,14 +382,43 @@ class InfoFrame(tk.Frame):
                             break
             else:
                 #here make dropdownmenues instat of labels and bind and updatentry to it 
-                print 'please implement me'
+                self.VarList = []
+                r = 2
+                c = 0
+                for i in e.attrib.keys():            
+                    newVar = tk.StringVar(self)
+                    newVar.set(i)
+                    newLabel = tk.OptionMenu(self,newVar,*e.attrib.keys(),command=self.updateEntry)
+                    newLabel.grid(row=r,column=c,**options)
+                    
+                    eString = displayString(e.attrib[i])
+                    newEntry = tk.Entry(self)
+                    newEntry.insert(0,eString)                
+                    newEntry.grid(row=r,column=c+1,columnspan=5,**options)
+                    self.LabelList.append(newLabel)
+                    self.EntryList.append(newEntry)
+                    self.VarList.append(newVar)
+                    r = r+1
+                    if r > 4:
+                        r = 2
+                        c = c+6
+                        if c >= 12:
+                            break
 
-
+    def updateEntry(self,event):
+        w = event.widget
+        i = self.LabelList.index(w)
+        self.EntryList[i].delete(0,tk.END)
+        a = self.VarList[i].get()
+        eString = displayString(self.entry.attrib[a])
+        self.EntryList[i].insert(0,eString)
+        
     def clearLists(self):
         for l in self.LabelList:
             l.destroy()
         for l in self.EntryList:
             l.destroy()
+        self.VarList = []
                 
         
     def displayInfo(self,event):
@@ -401,13 +436,20 @@ class HistoryFrame(tk.Toplevel):
         self.fillBox()
         
     def createWidgets(self):
+        for i in range(0,50):
+            self.rowconfigure(i,weight=1)
+            self.columnconfigure(i,weight=1)
         self.historyList = tk.Listbox(self)
-        self.historyList.grid(row=0,column=0,rowspan=20,columnspan=3)
+        self.historyList.grid(row=0,column=0,rowspan=20,columnspan=3,sticky='NSEW',padx=3,pady=3)
+        scrollbar = tk.Scrollbar(self)
+        scrollbar.grid(row=0,column=3,rowspan=20,sticky='NSW')
+        scrollbar.config(command=self.historyList.yview)   
+        self.historyList.config(yscrollcommand=scrollbar.set)
         self.historyList.bind("<Double-Button-1>", self.displayInfo)
         self.closeButton = tk.Button(self,text='close')
-        self.closeButton.grid(row=21,column=1)
+        self.closeButton.grid(row=21,column=1,columnspan=1,sticky = 'NSEW',padx=3,pady=3)
         self.closeButton.bind("<Button-1>", self.close)
-    
+
     def close(self,event):
         self.destroy()
         
