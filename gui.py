@@ -184,7 +184,7 @@ class Application(tk.Tk):
         self.dataBase.delete(0,tk.END)
         if self.media_database == None:
             return
-        else
+        else:
             for i in self.media_database.get_selection(**args):
                 self.dataBase.insert(tk.END,i)
             
@@ -276,7 +276,6 @@ class SelectorFrame(tk.Frame):
             if var == '-' or len(uString) == 0:
                 continue
             args[self.VarList[e].get()] = uString
-        print args
         return args
     
     def update(self):
@@ -456,7 +455,7 @@ class HistoryFrame(tk.Toplevel):
     def fillBox(self):
         self.historyList.delete(0,tk.END)
         for i in self.history:
-            self.historyList.insert(tk.END,i.get_display_string())
+            self.historyList.insert(0,i.get_display_string())
     
     def displayInfo(self,event):
         s = self.historyList.curselection()
@@ -508,7 +507,7 @@ class InfoWindow(tk.Toplevel):
         self.linkButton.bind("<Button-1>", self.link)
         self.updateButton = tk.Button(self,text='update entry')
         self.updateButton.grid(row=3,column=7)
-        self.updateButton.bind("<Button-1>", self.updateEntry)
+        self.updateButton.bind("<Button-1>", self.updateEntryEvent)
         self.deleteButton = tk.Button(self,text='delete from disk')
         self.deleteButton.grid(row=4,column=7)
         self.deleteButton.bind("<Button-1>", self.delete)
@@ -553,11 +552,17 @@ class InfoWindow(tk.Toplevel):
         t.start() 
 
     def updateWindow(self,entry=None):
+        if self.changedInfo():
+            if tkMessageBox.askokcancel("Update Info","Entries have been updated. Do you want to save first?"):
+                self.updateEntry()
         if entry != None:
             self.entry = entry
         self.fillInfo()
     
-    def updateEntry(self,event):
+    def updateEntryEvent(self,event):
+        self.updateEntry()
+        
+    def updateEntry(self):
         """
         """
         attrib = {}
@@ -571,9 +576,24 @@ class InfoWindow(tk.Toplevel):
         
     
     def delete(self,event):
-        self.entry.delete()
-        self.status = 'deleted'
+        if tkMessageBox.askokcancel("Delete", 
+            "This will erase " + self.entry.get_display_string() + " from the harddisk! Continue?"):
+            self.entry.delete()
+            self.status = 'deleted'
+        else:
+            return
+    
+    def changedInfo(self):
+        attrib = {}
+        for e,i in enumerate(self.LabelList):
+            uString = self.EntryList[e].get()
+            uString = updateString(uString)
+            attrib[i.cget('text')] = uString
+            if len(uString) == 0:
+                continue
+        return not self.entry.match_selection(**attrib)
         
+ 
     def checkStatus(self):
         return self.status
     

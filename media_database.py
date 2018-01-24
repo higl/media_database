@@ -197,33 +197,14 @@ class media_database:
             return 'unknown'
     
         
-    def add_entry(self,d,*args,**kwargs):
+    def add_entry(self,new_entry,*args,**kwargs):
         """
             This function adds an media_entry to the database.
             
             It first determines the appropriate media type and creates the media_entry 
             if also checks if the same entry already exists. In that case the new media_entry is not added. 
         """
-    
-        hash = hash(d)
-        for i in self.dlist:
-            if i.get_hash() == hash:
-                raise TaskNotExecutedException('item already in list')
-                return
-         
-        type = self.determine_media_type(d)
-
-        if type == 'video':
-            new_entry = video_entry(i,**kwargs)
-        elif type == 'music':
-            new_entry = music_entry(i,**kwargs)
-        elif type == 'exec':
-            new_entry = executable_entry(i,**kwargs)
-        elif type == 'picutre':
-            new_entry = picture_entry(i,**kwargs)
-        else:
-            new_entry = media_entry(i,**kwargs)
-
+        
         self.dlist.append(new_entry)
 
         for a in new_entry.attrib.keys():
@@ -233,6 +214,7 @@ class media_database:
                 self.alist[a] = self.alist[a] + 1
         
         self.saved = False
+        self.mtime = time()
 
         
     def delete_entry(self,entry,delete_from_disk=False):

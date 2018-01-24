@@ -152,9 +152,9 @@ class media_entry:
                 
                 for e,j in enumerate(args):
                     if case_sensitive:
-                        match[e] = any(j.lower() in k.lower() for k in self.attrib[i])
-                    else:
                         match[e] = any(j in k for k in self.attrib[i])
+                    else:
+                        match[e] = any(j.lower() in k.lower() for k in self.attrib[i])
                             
                 if not all(match):
                     return False
@@ -176,8 +176,8 @@ class media_entry:
                 return
          
         if os.name == 'nt':
-            filepath = '"' + filepath + '"'
-            os.system(filepath)
+            filepath = os.path.normpath(filepath)
+            os.startfile(filepath)
         elif os.name == 'posix':
             #filepath = self.parent+'/'+filepath
             specialchars = [' ', '(', ')']
