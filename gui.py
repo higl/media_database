@@ -207,6 +207,9 @@ class Application(tk.Tk):
                 self.media_database.saved = False
                 self.infoWindow.status = 'normal'
             elif s == 'deleted':
+                self.history.remove(self.infoWindow.entry)
+                if self.historyWindow != None:
+                    self.historyWindow.fillBox()
                 self.media_database.delete_entry(self.infoWindow.entry)
                 self.infoWindow.destroy()
                 self.infoWindow = None
