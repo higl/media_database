@@ -256,3 +256,23 @@ class media_database:
                 return i
         
         return None
+        
+    def get_attrib_stat(self):
+        attrib = {}
+        for i in self.dlist:
+            entryattrib = i.attrib
+            ekeys = entryattrib.keys()
+            for j in ekeys:
+                if not attrib.has_key(j):
+                    attrib[j] = {}
+                    for k in entryattrib[j]:
+                        attrib[j][k] = 1
+                else:
+                    for k in entryattrib[j]:
+                        if attrib[j].has_key(k):
+                            attrib[j][k] += 1
+                        else:
+                            attrib[j][k] = 1
+        
+        return attrib
+                
