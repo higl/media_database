@@ -20,6 +20,7 @@ class Application(tk.Tk):
         self.infoWindow = None
         self.history = []
         self.media_database = None
+        self.selectionList = []
         self.grid()
         self.createWidgets()
         self.bindActions()
@@ -71,6 +72,9 @@ class Application(tk.Tk):
         self.singleMode = tk.IntVar()
         self.singleBox = tk.Checkbutton(self,text='single',variable=self.singleMode)
         self.singleBox.grid(row=toolr+4,column=toolc+0,**options)
+        self.selectionMode = tk.IntVar()
+        self.selectionBox = tk.Checkbutton(self,text='selected',variable=self.selectionMode)
+        self.selectionBox.grid(row=toolr+5,column=toolc+0,**options)
         
         dbr = 1
         dbc = 0
@@ -139,7 +143,10 @@ class Application(tk.Tk):
             self.media_database.delete_entry(e)
 
     def randomFile(self,event):
-        self.last = self.media_database.get_random_entry(single=self.singleMode.get())
+        if self.selectionMode.get():
+            self.last = self.media_database.get_random_entry(single=self.singleMode.get(),selection=self.selectionList)
+        else:
+            self.last = self.media_database.get_random_entry(single=self.singleMode.get())
         self.infobox.update(entry=self.last)
         self.history.append(self.last)  
         if self.historyWindow != None:
@@ -206,7 +213,8 @@ class Application(tk.Tk):
         if self.media_database == None:
             return
         else:
-            for i in self.media_database.get_selection(**args):
+            self.selectionList = self.media_database.get_selection(**args)
+            for i in self.selectionList:
                 self.dataBase.insert(tk.END,i)
             
     def checkHistoryWindow(self):

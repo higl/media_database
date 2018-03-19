@@ -71,18 +71,23 @@ class media_database:
         with open(str(self.hash)+'.pkl', 'wb') as output:
             pickle.dump(out, output, pickle.HIGHEST_PROTOCOL)
             
-    def get_random_entry(self,single=False):
+    def get_random_entry(self,single=False,selection=None):
+        if selection != None:
+            elist = [self.find_entry(i) for i in selection]
+        else: 
+            elist = self.dlist
+            
         if single:
-            mask = [i.played for i in self.dlist]
-            m = [i for (i,v) in zip(self.dlist,mask) if not v]
+            mask = [i.played for i in elist]
+            m = [i for (i,v) in zip(elist,mask) if not v]
             if len(m) == 0:
                 print('Congrats you\'ve seen it all')
-                for i in self.dlist:
+                for i in elist:
                     i.set_played(False)
-                m = self.dlist
+                m = elist
             return random.choice(m)
         else:
-            return random.choice(self.dlist)
+            return random.choice(elist)
         
     
     def fill(self,d,ty='unknown'):
