@@ -171,7 +171,8 @@ class Application(tk.Tk):
     
     def statistics_window(self):
         attrib = self.media_database.get_attrib_stat()
-        StatisticsWindow(self,attrib)
+        count = self.media_database.get_entry_count()
+        StatisticsWindow(self,attrib,count)
         
         
     def getSelected(self):
@@ -628,25 +629,23 @@ class InfoWindow(tk.Toplevel):
 
 class StatisticsWindow(tk.Toplevel):
     
-    def __init__(self,master,attrib,*args,**kwargs):
+    def __init__(self,master,attrib,count,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
         self.attrib = attrib
+        self.count = count
         self.grid()
         self.createWidgets()
         self.fillInfo()
         
     def createWidgets(self):
         self.attribList = tk.Listbox(self)
-        self.attribList.grid(row=0,column=0,rowspan=5,columnspan=3)
+        self.attribList.grid(row=0,column=0,rowspan=20,columnspan=3)
         scrollbar = tk.Scrollbar(self)
-        scrollbar.grid(row=0,column=3,rowspan=5,sticky='NSW')
+        scrollbar.grid(row=0,column=3,rowspan=20,sticky='NSW')
         scrollbar.config(command=self.attribList.yview)   
         self.attribList.config(yscrollcommand=scrollbar.set)
         self.attribList.bind("<<ListboxSelect>>", self.displayStat)
 
-        self.closeButton = tk.Button(self,text='close')
-        self.closeButton.grid(row=10,column=1,columnspan=1,sticky = 'NSEW',padx=3,pady=3)
-        self.closeButton.bind("<Button-1>", self.close)
 
         self.statList = tk.Listbox(self)
         self.statList.grid(row=0,column=4,rowspan=20,columnspan=6)
@@ -654,7 +653,15 @@ class StatisticsWindow(tk.Toplevel):
         scrollbar_stat.grid(row=0,column=11,rowspan=20,sticky='NSW')
         scrollbar_stat.config(command=self.statList.yview)   
         self.statList.config(yscrollcommand=scrollbar_stat.set)
+        
+        self.countLabel = tk.Label(self,text='Entry Count: ' + str(self.count))
+        self.countLabel.grid(row=20,column=7,sticky = 'NSEW',padx=3,pady=3)
 
+        self.closeButton = tk.Button(self,text='close')
+        self.closeButton.grid(row=20,column=1,columnspan=1,sticky = 'NSEW',padx=3,pady=3)
+        self.closeButton.bind("<Button-1>", self.close)
+
+        
     def close(self,event):
         self.destroy()
         

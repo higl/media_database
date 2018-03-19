@@ -258,21 +258,39 @@ class media_database:
         return None
         
     def get_attrib_stat(self):
-        attrib = {}
+        attrib = {'Type':{'undefined':0}}
+        empty = 0
         for i in self.dlist:
+            if attrib['Type'].has_key(i.type):
+                attrib['Type'][i.type] += 1
+            else: 
+                attrib['Type'][i.type] = 1
+                
             entryattrib = i.attrib
             ekeys = entryattrib.keys()
             for j in ekeys:
                 if not attrib.has_key(j):
-                    attrib[j] = {}
-                    for k in entryattrib[j]:
-                        attrib[j][k] = 1
-                else:
+                    attrib[j] = {'undefined':empty}
+                    if len(entryattrib[j]) == 0:
+                        attrib[j]['undefined'] += 1
+                    else:    
+                        for k in entryattrib[j]:
+                            attrib[j][k] = 1
+                elif len(entryattrib[j]) == 0:
+                    attrib[j]['undefined'] += 1
+                else:    
                     for k in entryattrib[j]:
                         if attrib[j].has_key(k):
                             attrib[j][k] += 1
                         else:
                             attrib[j][k] = 1
+            for j in attrib.keys():
+                if j != 'Type' and not entryattrib.has_key(j):
+                    attrib[j]['undefined'] += 1
+                    
+            empty += 1
         
         return attrib
-                
+    
+    def get_entry_count(self):
+        return len(self.dlist)
