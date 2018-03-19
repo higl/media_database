@@ -72,22 +72,24 @@ class media_database:
             pickle.dump(out, output, pickle.HIGHEST_PROTOCOL)
             
     def get_random_entry(self,single=False,selection=None):
+        """
+            slection mode does not add to single mode
+        """
         if selection != None:
-            elist = [self.find_entry(i) for i in selection]
+            return self.find_entry(random.choice(selection))
         else: 
-            elist = self.dlist
-            
-        if single:
-            mask = [i.played for i in elist]
-            m = [i for (i,v) in zip(elist,mask) if not v]
-            if len(m) == 0:
-                print('Congrats you\'ve seen it all')
-                for i in elist:
-                    i.set_played(False)
-                m = elist
-            return random.choice(m)
-        else:
-            return random.choice(elist)
+            elist = self.dlist            
+            if single:
+                mask = [i.played for i in elist]
+                m = [i for (i,v) in zip(elist,mask) if not v]
+                if len(m) == 0:
+                    print('Congrats you\'ve seen it all')
+                    for i in elist:
+                        i.set_played(False)
+                    m = elist
+                return random.choice(m)
+            else:
+                return random.choice(elist)
         
     
     def fill(self,d,ty='unknown'):

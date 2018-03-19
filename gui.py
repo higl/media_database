@@ -118,7 +118,8 @@ class Application(tk.Tk):
                 
         self.media_database = mdb.media_database(self.filepath.get())
         self.dataBase.delete(0,tk.END)
-        for i in self.media_database.get_selection():
+        self.selectionList = self.media_database.get_selection()
+        for i in self.selectionList:
             self.dataBase.insert(tk.END,i)
         self.selector.update()
         
