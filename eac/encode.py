@@ -2,10 +2,12 @@ import os
 import subprocess
 import tempfile
 
+vformats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg')
+
 def encode(inpath,outpath,quality='low',encoder='ffmpeg',processes=1,audio='mp4',override=False):
     #\\TODO acceptedformats
     #\\TODO only do those files that are not already done
-    #f = findFiles(inpath)
+    f = findFiles(inpath,formats=vformats)
     
     #\\TODO clean that up and make it useable
     video_quality_presets = {
