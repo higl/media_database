@@ -20,17 +20,32 @@ class Application(tk.Tk):
         self.infoWindow = None
         self.history = []
         self.media_database = None
+        self.selectionList = []
         self.grid()
         self.createWidgets()
         self.bindActions()
         self.protocol("WM_DELETE_WINDOW", self.onClose)
         
     def createWidgets(self):
+    
+        #menu creation
+        menubar = tk.Menu(self)
+
+        # create a pulldown menu, and add it to the menu bar
+        toolmenu = tk.Menu(menubar, tearoff=0)
+        toolmenu.add_command(label="Statistics", command=self.statistics_window)
+        toolmenu.add_separator()
+        menubar.add_cascade(label="Tools", menu=toolmenu)
+
+        # display the menu
+        self.config(menu=menubar)
+
+        #main window widgets
         for i in range(0,50):
             self.rowconfigure(i,weight=1)
             self.columnconfigure(i,weight=1)
         
-        
+ 
         options = {'sticky':'NSEW','padx':3,'pady':3}
         
         inputr = 0
@@ -57,6 +72,9 @@ class Application(tk.Tk):
         self.singleMode = tk.IntVar()
         self.singleBox = tk.Checkbutton(self,text='single',variable=self.singleMode)
         self.singleBox.grid(row=toolr+4,column=toolc+0,**options)
+        self.selectionMode = tk.IntVar()
+        self.selectionBox = tk.Checkbutton(self,text='selected',variable=self.selectionMode)
+        self.selectionBox.grid(row=toolr+5,column=toolc+0,**options)
         
         dbr = 1
         dbc = 0
@@ -100,7 +118,8 @@ class Application(tk.Tk):
                 
         self.media_database = mdb.media_database(self.filepath.get())
         self.dataBase.delete(0,tk.END)
-        for i in self.media_database.get_selection():
+        self.selectionList = self.media_database.get_selection()
+        for i in self.selectionList:
             self.dataBase.insert(tk.END,i)
         self.selector.update()
         
@@ -125,7 +144,10 @@ class Application(tk.Tk):
             self.media_database.delete_entry(e)
 
     def randomFile(self,event):
-        self.last = self.media_database.get_random_entry(single=self.singleMode.get())
+        if self.selectionMode.get():
+            self.last = self.media_database.get_random_entry(single=self.singleMode.get(),selection=self.selectionList)
+        else:
+            self.last = self.media_database.get_random_entry(single=self.singleMode.get())
         self.infobox.update(entry=self.last)
         self.history.append(self.last)  
         if self.historyWindow != None:
@@ -148,11 +170,18 @@ class Application(tk.Tk):
         else:
             self.historyWindow = HistoryFrame(self,self.history)
             self.after(50,self.checkHistoryWindow)
-            
+
+        
     def displayInfo(self,event):
         e = self.getSelected()
         if e != None:
             self.createInfoWindow(e)
+    
+    def statistics_window(self):
+        attrib = self.media_database.get_attrib_stat()
+        count = self.media_database.get_entry_count()
+        StatisticsWindow(self,attrib,count)
+        
         
     def getSelected(self):
         s = self.dataBase.curselection()
@@ -185,7 +214,8 @@ class Application(tk.Tk):
         if self.media_database == None:
             return
         else:
-            for i in self.media_database.get_selection(**args):
+            self.selectionList = self.media_database.get_selection(**args)
+            for i in self.selectionList:
                 self.dataBase.insert(tk.END,i)
             
     def checkHistoryWindow(self):
@@ -606,6 +636,64 @@ class InfoWindow(tk.Toplevel):
     def link(self,event):
         print 'zelda is not link'
 
+class StatisticsWindow(tk.Toplevel):
+    
+    def __init__(self,master,attrib,count,*args,**kwargs):
+        tk.Toplevel.__init__(self,master=master,*args,**kwargs)
+        self.attrib = attrib
+        self.count = count
+        self.grid()
+        self.createWidgets()
+        self.fillInfo()
+        
+    def createWidgets(self):
+        self.attribList = tk.Listbox(self)
+        self.attribList.grid(row=0,column=0,rowspan=20,columnspan=3)
+        scrollbar = tk.Scrollbar(self)
+        scrollbar.grid(row=0,column=3,rowspan=20,sticky='NSW')
+        scrollbar.config(command=self.attribList.yview)   
+        self.attribList.config(yscrollcommand=scrollbar.set)
+        self.attribList.bind("<<ListboxSelect>>", self.displayStat)
+
+
+        self.statList = tk.Listbox(self)
+        self.statList.grid(row=0,column=4,rowspan=20,columnspan=6)
+        scrollbar_stat = tk.Scrollbar(self)
+        scrollbar_stat.grid(row=0,column=11,rowspan=20,sticky='NSW')
+        scrollbar_stat.config(command=self.statList.yview)   
+        self.statList.config(yscrollcommand=scrollbar_stat.set)
+        
+        self.countLabel = tk.Label(self,text='Entry Count: ' + str(self.count))
+        self.countLabel.grid(row=20,column=7,sticky = 'NSEW',padx=3,pady=3)
+
+        self.closeButton = tk.Button(self,text='close')
+        self.closeButton.grid(row=20,column=1,columnspan=1,sticky = 'NSEW',padx=3,pady=3)
+        self.closeButton.bind("<Button-1>", self.close)
+
+        
+    def close(self,event):
+        self.destroy()
+        
+    def fillInfo(self):
+        for i in self.attrib.keys():
+            self.attribList.insert(tk.END,i)
+
+    def displayStat(self,event):   
+        s = self.attribList.curselection()
+        s = self.attrib.keys()[s[0]]
+        sort = sorted(self.attrib[s].items(), key=lambda x: x[1], reverse=True)
+        
+        self.statList.delete(0,tk.END)
+        for i in sort:
+            pad = 25 - len(i[0]) - len(str(i[1]))
+            if pad <= 0:
+                st = i[0] + str(i[1])
+            else:
+                st = i[0].ljust(len(i[0])+pad) + str(i[1])
+
+            self.statList.insert(tk.END,st)
+        
+        
 def updateString(s):
     tmpstr = s.split(',')
     tmpstr = list(map(lambda x: x.lstrip(),tmpstr))

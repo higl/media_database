@@ -71,18 +71,25 @@ class media_database:
         with open(str(self.hash)+'.pkl', 'wb') as output:
             pickle.dump(out, output, pickle.HIGHEST_PROTOCOL)
             
-    def get_random_entry(self,single=False):
-        if single:
-            mask = [i.played for i in self.dlist]
-            m = [i for (i,v) in zip(self.dlist,mask) if not v]
-            if len(m) == 0:
-                print('Congrats you\'ve seen it all')
-                for i in self.dlist:
-                    i.set_played(False)
-                m = self.dlist
-            return random.choice(m)
-        else:
-            return random.choice(self.dlist)
+    def get_random_entry(self,single=False,selection=None):
+        """
+            slection mode does not add to single mode
+        """
+        if selection != None:
+            return self.find_entry(random.choice(selection))
+        else: 
+            elist = self.dlist            
+            if single:
+                mask = [i.played for i in elist]
+                m = [i for (i,v) in zip(elist,mask) if not v]
+                if len(m) == 0:
+                    print('Congrats you\'ve seen it all')
+                    for i in elist:
+                        i.set_played(False)
+                    m = elist
+                return random.choice(m)
+            else:
+                return random.choice(elist)
         
     
     def fill(self,d,ty='unknown'):
@@ -256,3 +263,41 @@ class media_database:
                 return i
         
         return None
+        
+    def get_attrib_stat(self):
+        attrib = {'Type':{'undefined':0}}
+        empty = 0
+        for i in self.dlist:
+            if attrib['Type'].has_key(i.type):
+                attrib['Type'][i.type] += 1
+            else: 
+                attrib['Type'][i.type] = 1
+                
+            entryattrib = i.attrib
+            ekeys = entryattrib.keys()
+            for j in ekeys:
+                if not attrib.has_key(j):
+                    attrib[j] = {'undefined':empty}
+                    if len(entryattrib[j]) == 0:
+                        attrib[j]['undefined'] += 1
+                    else:    
+                        for k in entryattrib[j]:
+                            attrib[j][k] = 1
+                elif len(entryattrib[j]) == 0:
+                    attrib[j]['undefined'] += 1
+                else:    
+                    for k in entryattrib[j]:
+                        if attrib[j].has_key(k):
+                            attrib[j][k] += 1
+                        else:
+                            attrib[j][k] = 1
+            for j in attrib.keys():
+                if j != 'Type' and not entryattrib.has_key(j):
+                    attrib[j]['undefined'] += 1
+                    
+            empty += 1
+        
+        return attrib
+    
+    def get_entry_count(self):
+        return len(self.dlist)
