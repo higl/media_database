@@ -11,6 +11,7 @@ import media_database as mdb
 import media_entry as me
 import threading
 import eac.encode as eace
+import eac.compare as eacc
 
 class Application(tk.Tk):
     
@@ -36,6 +37,7 @@ class Application(tk.Tk):
         toolmenu = tk.Menu(menubar, tearoff=0)
         toolmenu.add_command(label="Statistics", command=self.statistics_window)
         toolmenu.add_command(label="Encode", command=self.encode_window)
+        toolmenu.add_command(label="Compare", command=self.compare_window)
         toolmenu.add_separator()
         menubar.add_cascade(label="Tools", menu=toolmenu)
 
@@ -186,6 +188,9 @@ class Application(tk.Tk):
     
     def encode_window(self):
         EncodeWindow(self)
+
+    def compare_window(self):
+        CompareWindow(self)
         
     def getSelected(self):
         s = self.dataBase.curselection()
@@ -778,12 +783,110 @@ class EncodeWindow(tk.Toplevel):
     def encode(self,event):
         if self.ready:
             self.error.set('')
-            eace.encode(self.inp,self.outp,quality='low',encoder='ffmpeg',processes=1,audio='mp4',override=False)
+            kargs = {'quality':'low','encoder':'ffmpeg','processes':4,'audio':'mp4','override':False}
+            args = (self.inp,self.outp)
+            t = threading.Thread(target=eace.encode,kwargs=kargs,args=args)
+            t.setDaemon(True)
+            t.start()
+            #eace.encode(self.inp,self.outp,quality='low',encoder='ffmpeg',processes=1,audio='mp4',override=False)
         else:
             self.error.set('first check the given input and output folder')
             return
         
+class CompareWindow(tk.Toplevel):
     
+    def __init__(self,master,*args,**kwargs):
+        tk.Toplevel.__init__(self,master=master,*args,**kwargs)
+        self.ready = False
+        self.grid()
+        self.createWidgets()
+        
+    def createWidgets(self):
+        options = {'sticky':'NSEW','padx':3,'pady':3}      
+        
+        self.inputPath = tk.Entry(self)
+        self.inputPath.grid(row=0,column=0,columnspan=10,**options)
+        self.outputPath = tk.Entry(self)
+        self.outputPath.grid(row=1,column=0,columnspan=10,**options)
+        
+        self.checkButton = tk.Button(self,text='Check')
+        self.checkButton.grid(row=0,column=11,**options)
+        self.checkButton.bind("<Button-1>", self.check)
+        
+        self.inputList = tk.Listbox(self)
+        self.inputList.grid(row=2,column=0,rowspan=20,columnspan=5)
+        scrollbar = tk.Scrollbar(self)
+        scrollbar.grid(row=2,column=5,rowspan=20,sticky='NSW')
+        scrollbar.config(command=self.inputList.yview)   
+        self.inputList.config(yscrollcommand=scrollbar.set)
+        
+        self.outputList = tk.Listbox(self)
+        self.outputList.grid(row=2,column=6,rowspan=20,columnspan=5)
+        scrollbar = tk.Scrollbar(self)
+        scrollbar.grid(row=2,column=11,rowspan=20,sticky='NSW')
+        scrollbar.config(command=self.outputList.yview)
+        self.outputList.config(yscrollcommand=scrollbar.set)
+        
+        self.compareButton = tk.Button(self,text='Compare')
+        self.compareButton.grid(row=22,column=0, columnspan=5,**options)
+        self.compareButton.bind("<Button-1>", self.encode)
+        
+        self.closeButton = tk.Button(self,text='Close')
+        self.closeButton.grid(row=22,column=5, columnspan=5,**options)
+        self.closeButton.bind("<Button-1>", self.close)
+        
+        self.error = tk.StringVar()
+        self.errorLabel = tk.Label(self,textvariable=self.error)
+        self.errorLabel.grid(row=23,column=0,columnspan=10,sticky = 'NSEW',padx=3,pady=3)
+
+    def close(self,event):
+        self.destroy()
+
+    def check(self,event):
+        import os
+        
+        self.inp = self.inputPath.get()
+        self.outp = self.outputPath.get()
+        
+        if not os.path.isdir(self.inp) or not os.path.isdir(self.outp):
+            self.ready = False
+            self.error.set('Input and Output have to be folders')
+            return
+        
+        self.infiles  = eace.findFiles(self.inp,formats=eace.vformats)
+        self.outfiles = eace.findFiles(self.outp,formats=eace.vformats)
+            
+        self.infiles = sorted(self.infiles)
+        self.outfiles = sorted(self.outfiles)
+        
+        self.inputList.delete(0,tk.END)
+        for i in self.infiles:
+            self.inputList.insert(tk.END,i)
+
+        self.outputList.delete(0,tk.END)
+        for i in self.outfiles:
+            self.outputList.insert(tk.END,i)
+        
+        self.ready = True
+        self.error.set('')
+        
+    def encode(self,event):
+        if self.ready:
+            self.error.set('')
+            self.infingerprints = []
+            self.outfingerprints = []
+            for i in self.infiles:
+                self.infingerprints.append(eacc.get_video_descriptor(i))
+            
+            for i in self.outfiles:
+                self.outfingerprints.append(eacc.get_video_descriptor(i))
+                
+            for i in self.infingerprints:
+                for j in self.outfingerprints:
+                    print eacc.compare_clips(i,j)
+        else:
+            self.error.set('first check the given input and output folder')
+            return    
         
 def updateString(s):
     tmpstr = s.split(',')
