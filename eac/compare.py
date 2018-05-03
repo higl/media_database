@@ -1,9 +1,3 @@
-
-# coding: utf-8
-
-# In[1]:
-
-
 import cv2
 import subprocess
 import tempfile
@@ -12,33 +6,37 @@ import scipy.spatial
 import os
 
 
-
-
-#input file
-inp = 'SampleVideo_1280x720_1mb.mp4'
-
-
-# ## Video transformation
-
-# In[3]:
-
-def get_video_descriptor(video,nfps=10,M=640,N=320,nkey=100):
+# Video transformation
+def get_video_descriptor(video,nfps=3,quality='320x640',nkey=180,processes=1):
     import encode
     # using ffmpeg and storing the file in a temp folder 
     # use the (modified) code from the Desktop pc with video conversion!
     #tempdir = tempfile.mkdtemp()
-    #test the performance with QCIF (= 72×144) and 320x640
+    #test the performance with QCIF (= 72x144) and 320x640
     
     #change fps to nfps (ffmpeg option is -r nfps)
     
-    
+    N_opts = {'320x640':320,'qcif':72}
+    try:
+        N = N_opts[quality]
+        M = 2*N
+    except:
+        print 'Erro: not a valid quality option for the encoding'
+        return
     #change resolution to MxN with N=2xM (ffmpeg option is -s 2*NxN) 
     outpath = tempfile.mkdtemp()
     output = outpath + "\\" + os.path.split(video)[-1]
-    encode.encode(video,outpath,inpath_is_file=True,quality='320x640',processes=1,options=['-r', nfps])
+    encode.encode(video,outpath,inpath_is_file=True,quality=quality,processes=processes,options=['-r', nfps])
     
     fr,gfr,ts,te = get_keyframes(output,nkey,M=M,N=N,nfps=nfps)
-    os.remove(outpath)
+    
+    for root, dirs, files in os.walk(outpath, topdown=False):
+        for name in files:
+            os.remove(os.path.join(root, name))
+        for name in dirs:
+            os.rmdir(os.path.join(root, name))
+    os.rmdir(outpath)
+    
     return get_fingerprints(fr,gfr,ts,te)
     
 
@@ -50,24 +48,27 @@ def get_keyframes(video,nkey,N=320,M=640,nfps=10):
     keyframes = []
     graykeyframes = []
     nframes = 1
-    key = np.zeros([M,N,3],dtype='float16')
-    gray = np.zeros([M,N],dtype='float16')
+    key = np.zeros([M,N,3],dtype='uint32')
+    gray = np.zeros([M,N],dtype='uint32')
+    
     
     while(v.isOpened()):
         ret, frame = v.read()
+    
         if frame is None:
-            keyframes.append(key.astype('uint8'))
-            graykeyframes.append(gray.astype('uint8'))
+            keyframes.append((key/nkey).astype('uint8'))
+            graykeyframes.append((gray/nkey).astype('uint8'))
             break
         else:
-            key = key + frame/(nkey)
-            gray = gray + cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)/(nkey)
+            key = key + frame
+            gray = gray + cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+        
         if nframes == nkey:
-            keyframes.append(key.astype('uint8'))
-            graykeyframes.append(gray.astype('uint8'))
+            keyframes.append((key/nkey).astype('uint8'))
+            graykeyframes.append((gray/nkey).astype('uint8'))
             nframes = 1
-            key = np.zeros([M,N,3],dtype='float16')
-            gray = np.zeros([M,N],dtype='float16')
+            key = np.zeros([M,N,3],dtype='uint32')
+            gray = np.zeros([M,N],dtype='uint32')
         else:
             nframes = nframes + 1
         if cv2.waitKey(nfps) & 0xFF == ord('q'):
@@ -95,14 +96,12 @@ def get_keyframes(video,nkey,N=320,M=640,nfps=10):
         gkframes[i,:,N:] = flipgrey[i]
 
     return keyframes,gkframes,tstart,tend
-# ## Create fingerprints
-
-# In[75]:
-
-def get_fingerprints(kframes,gkframes,tstart,tend):
+    
+    
+# Create fingerprints
+def get_fingerprints(kframes,gkframes,tstart,tend,thrs=0.5,nfeatures=400,nlevels=15):
     fprin = {'thumb': [],'cc': [],'orb': [],'tstart': [],'tend': []}
-    orbfunc = cv2.ORB_create()
-    thrs = 0.5
+    orbfunc = cv2.ORB_create(nfeatures=nfeatures,nlevels=nlevels)
     
     for i,f in enumerate(kframes):
         ### 1. Fingerprint 
@@ -110,57 +109,50 @@ def get_fingerprints(kframes,gkframes,tstart,tend):
         ### 2. Fingerprint
         cc = color_correlation(f)
         ### 3. Fingerprint (local)
-        orb = orb_detection(f,orb=orbfunc)
+        orb = orb_detection(gkframes[i],orb=orbfunc)
         ### compare fingerprints to the previous fingerprint and discard too similar ones
         if i > 0:
-            sim = compare_frame([th,cc,orb],[prev_th,prev_cc,prev_orb])
+            sim = compare_frame([th,cc,orb[1]],[prev_th,prev_cc,prev_orb])
             if sim <= thrs:
                 fprin['thumb'].append(th)
                 fprin['cc'].append(cc)
-                fprin['orb'].append(orb)
+                fprin['orb'].append(orb[1])
                 fprin['tstart'].append(tstart[i])
                 fprin['tend'].append(tend[i])
                 prev_th = th
                 prev_cc = cc
-                prev_orb = orb
+                prev_orb = orb[1]
                 norb = len(orb[0])
             else:
                 #discard the keyframe with less orb points. Update the timestamps accordingly
                 if len(orb[0]) > norb:
                     fprin['thumb'][-1] = th
                     fprin['cc'][-1] = cc
-                    fprin['orb'][-1] = orb
+                    fprin['orb'][-1] = orb[1]
                     fprin['tend'][-1] = tend[i]
                     prev_th = th
                     prev_cc = cc
-                    prev_orb = orb
+                    prev_orb = orb[1]
                     norb = len(orb[0])
                 else:
                     fprin['tend'][-1] = tend[i]
         else:
             fprin['thumb'].append(th)
             fprin['cc'].append(cc)
-            fprin['orb'].append(orb)
+            fprin['orb'].append(orb[1])
             fprin['tstart'].append(tstart[i])
             fprin['tend'].append(tend[i])
             prev_th = th
             prev_cc = cc
-            prev_orb = orb
-            norb = len(orb[0])        
-            
-    fprin['nframes'] = len(fprin['th'])      
+            prev_orb = orb[1]
+            norb = len(orb[0]) 
+    fprin['nframes'] = len(fprin['thumb'])      
     return fprin
-
-# In[12]:
 
 
 ### 1. Fingerprint
 def thumbnail(frame,interp=cv2.INTER_AREA):
     return cv2.resize(frame,(30,30),interpolation=interp)
-
-
-# In[13]:
-
 
 ### 2. Fingerprint 
 def color_correlation(frame,b=8):
@@ -220,12 +212,7 @@ def color_correlation(frame,b=8):
     hist = hist * 100
     return hist[:5].astype('uint8')
 
-
-# In[15]:
-
-
 # 3rd Fingerprint
-
 def orb_detection(frame,orb=None):
     if orb == None:
         orb = cv2.ORB_create()
@@ -240,24 +227,17 @@ def orb_detection(frame,orb=None):
         return []
 
 
-# In[159]:
-
-
-wth  = 0.25
-wcc  = 0.25
-worb = 0.50
-qth  = 0.50
-qcc  = 0.75
-qorb = 0.70
-def compare_frame(querry,source):
+def compare_frame(querry,source,wth=0.25,wcc=0.25,worb=0.5,qth=0.5,qcc=0.75,qorb=0.7,orb_matcher=None):
     cor = correlation(querry[0],source[0])
     if cor >= qth:
-        dist_cc = distance(querry[1],source[1])
+        dist_cc = 1-distance_precomp(querry[1],source[1])
         if dist_cc >= qcc: 
             if len(querry[2]) > 0 and len(source[2]) > 0:
-                dist_orb = match_orb(querry[2],source[2])
+                dist_orb = match_orb(querry[2],source[2],matcher=orb_matcher)
                 if dist_orb >= qorb:
                     return wth * cor + wcc * dist_cc + worb *dist_orb
+                else:
+                    return wth * cor + wcc * dist_cc
             else:
                 return wth * cor + wcc * dist_cc
         else:
@@ -266,11 +246,7 @@ def compare_frame(querry,source):
         return 0.0
 
 
-# In[157]:
-
-
-threshold = 0.5
-def compare_clips(querry,source):
+def compare_clips(querry,source,threshold=0.75,orb_matcher=None):
     start_match_q = []
     end_match_q = []
     idf_q = []
@@ -278,6 +254,7 @@ def compare_clips(querry,source):
     end_match_s = []
     idf_s = []
     score = []
+    
     for i in range(querry['nframes']):
         if len(idf_q)>0 and idf_q[-1] == i-1:
             offset = idf_s[-1]+1
@@ -291,8 +268,7 @@ def compare_clips(querry,source):
             ccs = source['cc'][j]
             orbq = querry['orb'][i]
             orbs = source['orb'][j]
-            sim = compare_frame([thq,ccq,orbq],[ths,ccs,orbs])
-            
+            sim = compare_frame([thq,ccq,orbq],[ths,ccs,orbs],orb_matcher=orb_matcher)
             if sim > threshold:
                 if len(idf_q) > 0 and idf_q[-1] == i-1:
                     idf_q[-1] = i
@@ -305,14 +281,12 @@ def compare_clips(querry,source):
                     start_match_q.append(querry['tstart'][i])
                     end_match_q.append(querry['tend'][i])
                     idf_s.append(j)
-                    start_match_s.append(source['tstart'][i])
+                    start_match_s.append(source['tstart'][j])
                     end_match_s.append(source['tend'][j])
                     score.append(sim)
-                    
+                break
+
     return {'idq': idf_q, 'tsq': start_match_q,'teq': end_match_q ,'ids': idf_s, 'tss': start_match_s,'tes': end_match_s, 'score': score }
-
-
-# In[108]:
 
 
 def distance(querry,source,length=7):
@@ -327,9 +301,6 @@ def distance(querry,source,length=7):
     xor = np.bitwise_xor(querry,source)
     x = np.array([bin(i).count("1") for i in xor])
     return 1.0*np.sum(x)/(length*len(querry))
-
-
-# In[107]:
 
 
 _nbits = np.array(
@@ -363,21 +334,19 @@ def distance_precomp(querry,source,length=7):
     return 1.0*np.sum(x)/(length*len(querry))
 
 
-# In[138]:
-
-
-thorb = 0.7
-
-def match_orb(querry,source):
+def match_orb(querry,source,thorb=40,matcher=None):
+    if matcher == None:
+        bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    else:
+        bf = matcher
+    matches = bf.match(querry,source)
+    
     count = 0
-    for q in querry:
-        for s in source:
-            if 1.0-distance_precomp(q,s,length=8) > thorb:
-                count = count + 1
-                break
-                
+    for i in matches:
+        if i.distance < thorb:
+            count = count +1
     r = 1.0*count/len(querry)
-    print(count,r)
+    
     if r >= 0.7:
         return 1.0
     elif r >= 0.4:
@@ -390,17 +359,10 @@ def match_orb(querry,source):
         return 0.0
                 
 
-
-# In[63]:
-
-
 def correlation(querry,source):
     q = querry.flatten()
     s = source.flatten()
     return -(scipy.spatial.distance.correlation(q,s)-1.0)
-
-
-# In[20]:
 
 
 def blockshaped(arr, nrows, ncols):

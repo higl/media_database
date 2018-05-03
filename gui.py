@@ -463,7 +463,11 @@ class InfoFrame(tk.Frame):
                 
         
     def displayInfo(self,event):
-        e = self.master.getSelected()
+        if self.entry == None:
+            e = self.master.getSelected()
+        else:
+            e = self.entry
+            
         if e != None:
             self.master.createInfoWindow(e)
             
@@ -835,9 +839,45 @@ class CompareWindow(tk.Toplevel):
         self.closeButton.grid(row=22,column=5, columnspan=5,**options)
         self.closeButton.bind("<Button-1>", self.close)
         
+        
+        self.optionLabel = tk.Label(self,text='Video descriptor options:')
+        self.optionLabel.grid(row=23,column=0,columnspan=10,**options)
+
+        self.fpsLabel = tk.Label(self,text='nfps')
+        self.fpsLabel.grid(row=24,column=0,columnspan=1,**options)
+        self.fpsEntry = tk.Entry(self)
+        self.fpsEntry.grid(row=24,column=1,columnspan=1,**options)
+        self.fpsEntry.insert(tk.END,'3')
+        
+        self.nsecLabel = tk.Label(self,text='nseconds')
+        self.nsecLabel.grid(row=24,column=11,columnspan=1,**options)
+        self.nsecEntry = tk.Entry(self)
+        self.nsecEntry.grid(row=24,column=12,columnspan=1,**options)
+        self.nsecEntry.insert(tk.END,'60')
+
+        self.qualityLabel = tk.Label(self,text='quality')
+        self.qualityLabel.grid(row=25,column=0,columnspan=1,**options)
+        self.qualityEntry = tk.Entry(self)
+        self.qualityEntry.grid(row=25,column=1,columnspan=1,**options)
+        self.qualityEntry.insert(tk.END,'320x640')
+        
+        self.procLabel = tk.Label(self,text='processors')
+        self.procLabel.grid(row=25,column=11,columnspan=1,**options)
+        self.procEntry = tk.Entry(self)
+        self.procEntry.grid(row=25,column=12,columnspan=1,**options)
+        self.procEntry.insert(tk.END,'1')
+        
+        self.crossCheck = tk.IntVar()
+        self.crossCheckBox = tk.Checkbutton(self,text='cross check',variable=self.crossCheck)
+        self.crossCheckBox.grid(row=26,column=0,**options)
+
+        self.override = tk.IntVar()
+        self.overrideBox = tk.Checkbutton(self,text='override',variable=self.crossCheck)
+        self.overrideBox.grid(row=26,column=11,**options)
+        
         self.error = tk.StringVar()
         self.errorLabel = tk.Label(self,textvariable=self.error)
-        self.errorLabel.grid(row=23,column=0,columnspan=10,sticky = 'NSEW',padx=3,pady=3)
+        self.errorLabel.grid(row=27,column=0,columnspan=10,**options)
 
     def close(self,event):
         self.destroy()
@@ -876,17 +916,43 @@ class CompareWindow(tk.Toplevel):
             self.infingerprints = []
             self.outfingerprints = []
             for i in self.infiles:
-                self.infingerprints.append(eacc.get_video_descriptor(i))
+                self.infingerprints.append(self.get_video_descriptor(i,override=self.override))
             
             for i in self.outfiles:
-                self.outfingerprints.append(eacc.get_video_descriptor(i))
-                
+                self.outfingerprints.append(self.get_video_descriptor(i,override=self.override))
+            
+            import cv2            
+            matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
             for i in self.infingerprints:
                 for j in self.outfingerprints:
-                    print eacc.compare_clips(i,j)
+                    print eacc.compare_clips(i,j,orb_matcher=matcher)
+                    if self.crossCheck:
+                        print eacc.compare_clips(j,i,orb_matcher=matcher)
+                    
         else:
             self.error.set('first check the given input and output folder')
             return    
+    
+    def get_video_desciptor(file,override=False):
+        descriptor_file = self.rreplace(file,file.split('.')[-1],'dscr',1)
+        
+        if os.path.isfile(descriptor_file) and not override:
+            with open(descriptor_file, 'rb') as input:
+                descriptor = pickle.load(input)
+        else:
+            fps = int(self.fpsEntry.get())
+            nsec = fps * int(self.nsecEntry.get())
+            proc = int(self.procEntry.get())
+            
+            descriptor = eacc.get_video_descriptor(file,nfps=fps,nkey=nsec,processes=proc,quality=self.qualityEntry.get())
+            with open(descriptor_file, 'wb') as output:
+                pickle.dump(descriptor, output, pickle.HIGHEST_PROTOCOL)
+        
+        return descriptor
+        
+    def rreplace(s,old,new,number):
+        li = s.rsplit(old, number)
+        return new.join(li)
         
 def updateString(s):
     tmpstr = s.split(',')
