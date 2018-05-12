@@ -808,77 +808,167 @@ class CompareWindow(tk.Toplevel):
     def createWidgets(self):
         options = {'sticky':'NSEW','padx':3,'pady':3}      
         
-        self.inputPath = tk.Entry(self)
-        self.inputPath.grid(row=0,column=0,columnspan=10,**options)
-        self.outputPath = tk.Entry(self)
-        self.outputPath.grid(row=1,column=0,columnspan=10,**options)
+
+        self.error = tk.StringVar()
+        self.errorLabel = tk.Label(self,textvariable=self.error)
+        self.errorLabel.grid(row=0,column=0,columnspan=8,**options)        
         
-        self.checkButton = tk.Button(self,text='Check')
-        self.checkButton.grid(row=0,column=11,**options)
-        self.checkButton.bind("<Button-1>", self.check)
+        #input, output
+        rio = 1
+        cio = 0
+        
+        self.inputLabel = tk.Label(self,text='Querry')
+        self.inputLabel.grid(row=rio,column=cio,columnspan=3,**options)
+        self.inputPath = tk.Entry(self)
+        self.inputPath.grid(row=rio+1,column=cio,columnspan=3,**options)
+        self.outputLabel = tk.Label(self,text='Source')
+        self.outputLabel.grid(row=rio,column=cio+3,columnspan=3,**options)
+        self.outputPath = tk.Entry(self)
+        self.outputPath.grid(row=rio+1,column=cio+3,columnspan=3,**options)
+        
+        self.querrysource = tk.IntVar()
+        self.qsBox = tk.Checkbutton(self,text='Querry = Source',variable=self.querrysource)
+        self.qsBox.grid(row=rio+2,column=cio,**options)
+                
+        self.sourcedb = tk.IntVar()
+        self.sdbBox = tk.Checkbutton(self,text='Source = media db',variable=self.sourcedb)
+        self.sdbBox.grid(row=rio+2,column=cio+3,**options)
         
         self.inputList = tk.Listbox(self)
-        self.inputList.grid(row=2,column=0,rowspan=20,columnspan=5)
+        self.inputList.grid(row=rio+3,column=cio,rowspan=20,columnspan=2,**options)
         scrollbar = tk.Scrollbar(self)
-        scrollbar.grid(row=2,column=5,rowspan=20,sticky='NSW')
+        scrollbar.grid(row=rio+3,column=cio+2,rowspan=20,sticky='NSW')
         scrollbar.config(command=self.inputList.yview)   
         self.inputList.config(yscrollcommand=scrollbar.set)
         
         self.outputList = tk.Listbox(self)
-        self.outputList.grid(row=2,column=6,rowspan=20,columnspan=5)
+        self.outputList.grid(row=rio+3,column=cio+3,rowspan=20,columnspan=2,**options)
         scrollbar = tk.Scrollbar(self)
-        scrollbar.grid(row=2,column=11,rowspan=20,sticky='NSW')
+        scrollbar.grid(row=rio+3,column=cio+3+2,rowspan=20,sticky='NSW')
         scrollbar.config(command=self.outputList.yview)
         self.outputList.config(yscrollcommand=scrollbar.set)
         
+        
+        self.checkButton = tk.Button(self,text='Check')
+        self.checkButton.grid(row=rio+23,column=cio,columnspan=2,**options)
+        self.checkButton.bind("<Button-1>", self.check)
+        
         self.compareButton = tk.Button(self,text='Compare')
-        self.compareButton.grid(row=22,column=0, columnspan=5,**options)
+        self.compareButton.grid(row=rio+23,column=cio+3, columnspan=2,**options)
         self.compareButton.bind("<Button-1>", self.encode)
         
-        self.closeButton = tk.Button(self,text='Close')
-        self.closeButton.grid(row=22,column=5, columnspan=5,**options)
-        self.closeButton.bind("<Button-1>", self.close)
-        
-        
-        self.optionLabel = tk.Label(self,text='Video descriptor options:')
-        self.optionLabel.grid(row=23,column=0,columnspan=10,**options)
+        #options block
+        orow = 1
+        ocol = 7
 
+        self.optionLabel = tk.Label(self,text='Options:')
+        self.optionLabel.grid(row=orow,column=ocol,columnspan=2,**options)
+       
         self.fpsLabel = tk.Label(self,text='nfps')
-        self.fpsLabel.grid(row=24,column=0,columnspan=1,**options)
+        self.fpsLabel.grid(row=orow+1,column=ocol,columnspan=1,**options)
         self.fpsEntry = tk.Entry(self)
-        self.fpsEntry.grid(row=24,column=1,columnspan=1,**options)
+        self.fpsEntry.grid(row=orow+1,column=ocol+1,columnspan=1,**options)
         self.fpsEntry.insert(tk.END,'3')
         
         self.nsecLabel = tk.Label(self,text='nseconds')
-        self.nsecLabel.grid(row=24,column=11,columnspan=1,**options)
+        self.nsecLabel.grid(row=orow+2,column=ocol,columnspan=1,**options)
         self.nsecEntry = tk.Entry(self)
-        self.nsecEntry.grid(row=24,column=12,columnspan=1,**options)
+        self.nsecEntry.grid(row=orow+2,column=ocol+1,columnspan=1,**options)
         self.nsecEntry.insert(tk.END,'60')
 
         self.qualityLabel = tk.Label(self,text='quality')
-        self.qualityLabel.grid(row=25,column=0,columnspan=1,**options)
+        self.qualityLabel.grid(row=orow+3,column=ocol,columnspan=1,**options)
         self.qualityEntry = tk.Entry(self)
-        self.qualityEntry.grid(row=25,column=1,columnspan=1,**options)
+        self.qualityEntry.grid(row=orow+3,column=ocol+1,columnspan=1,**options)
         self.qualityEntry.insert(tk.END,'320x640')
         
         self.procLabel = tk.Label(self,text='processors')
-        self.procLabel.grid(row=25,column=11,columnspan=1,**options)
+        self.procLabel.grid(row=orow+4,column=ocol,columnspan=1,**options)
         self.procEntry = tk.Entry(self)
-        self.procEntry.grid(row=25,column=12,columnspan=1,**options)
+        self.procEntry.grid(row=orow+4,column=ocol+1,columnspan=1,**options)
         self.procEntry.insert(tk.END,'1')
         
         self.crossCheck = tk.IntVar()
         self.crossCheckBox = tk.Checkbutton(self,text='cross check',variable=self.crossCheck)
-        self.crossCheckBox.grid(row=26,column=0,**options)
+        self.crossCheckBox.grid(row=orow+5,column=ocol,columnspan=2,**options)
 
         self.override = tk.IntVar()
         self.overrideBox = tk.Checkbutton(self,text='override',variable=self.crossCheck)
-        self.overrideBox.grid(row=26,column=11,**options)
+        self.overrideBox.grid(row=orow+6,column=ocol,columnspan=2,**options)
         
-        self.error = tk.StringVar()
-        self.errorLabel = tk.Label(self,textvariable=self.error)
-        self.errorLabel.grid(row=27,column=0,columnspan=10,**options)
+        self.closeButton = tk.Button(self,text='Close')
+        self.closeButton.grid(row=orow+23,column=ocol, columnspan=2,**options)
+        self.closeButton.bind("<Button-1>", self.close)
+        
+        
+        # result block
+        rrow = 25
+        rcol = 0
+        
+        self.resultLabel = tk.Label(self,text='Results:')
+        self.resultLabel.grid(row=rrow,column=rcol,columnspan=1,**options)
 
+        self.resultCounter = tk.StringVar()
+        self.resultCountLabel = tk.Label(self,textvariable=self.resultCounter)
+        self.resultCountLabel.grid(row=rrow+1,column=rcol,columnspan=1,**options) 
+
+        self.rquerryLabel = tk.Label(self,text='Querry path')
+        self.rquerryLabel.grid(row=rrow+2,column=rcol,columnspan=2,**options)
+        
+        self.rsourceLabel = tk.Label(self,text='Source path')
+        self.rsourceLabel.grid(row=rrow+2,column=rcol+4,columnspan=2,**options)
+        
+        # create scrolled canvas
+
+        vscrollbar = AutoScrollbar(self)
+        vscrollbar.grid(row=rrow+3, column=6, sticky='NSW')
+#        hscrollbar = AutoScrollbar(root, orient=HORIZONTAL)
+#        hscrollbar.grid(row=1, column=0, sticky=E+W)
+
+        self.resultCanvas = tk.Canvas(self, yscrollcommand=vscrollbar.set)
+        self.resultCanvas.grid(row=rrow+3, column=rcol,columnspan=5, **options)
+
+        vscrollbar.config(command=self.resultCanvas.yview)
+ #       hscrollbar.config(command=canvas.xview)
+
+        # make the canvas expandable
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        # create canvas contents
+        self.resultframe = tk.Frame(self.resultCanvas)
+        self.resultframe.rowconfigure(1, weight=1)
+        self.resultframe.columnconfigure(1, weight=1)     
+        
+        for i in range(1, 5):
+            for j in range(1, 10):
+                button = tk.Button(self.resultframe, text="%d, %d" % (i,j))
+                button.grid(row=i, column=j, sticky='news')
+        
+        self.resultCanvas.create_window(0, 0, anchor='nw', window=self.resultframe)
+        self.resultframe.update_idletasks()
+        self.resultCanvas.config(scrollregion=self.resultCanvas.bbox("all"))
+
+        #result options block
+        rorow = rrow
+        rocol = rcol + 7
+
+        self.optionLabel = tk.Label(self,text='Options:')
+        self.optionLabel.grid(row=rorow,column=rocol,columnspan=2,**options)
+       
+        self.minScoreLabel = tk.Label(self,text='score min')
+        self.minScoreLabel.grid(row=rorow+1,column=rocol,columnspan=1,**options)
+        self.minScoreEntry = tk.Entry(self)
+        self.minScoreEntry.grid(row=rorow+1,column=rocol+1,columnspan=1,**options)
+        self.minScoreEntry.insert(tk.END,'70')       
+
+        self.maxScoreLabel = tk.Label(self,text='score max')
+        self.maxScoreLabel.grid(row=rorow+2,column=rocol,columnspan=1,**options)
+        self.maxScoreEntry = tk.Entry(self)
+        self.maxScoreEntry.grid(row=rorow+2,column=rocol+1,columnspan=1,**options)
+        self.maxScoreEntry.insert(tk.END,'70')
+
+        
     def close(self,event):
         self.destroy()
 
@@ -954,6 +1044,25 @@ class CompareWindow(tk.Toplevel):
         li = s.rsplit(old, number)
         return new.join(li)
         
+        
+        
+        
+class AutoScrollbar(tk.Scrollbar):
+    # A scrollbar that hides itself if it's not needed.
+    # Only works if you use the grid geometry manager!
+    def set(self, lo, hi):
+        if float(lo) <= 0.0 and float(hi) >= 1.0:
+            # grid_remove is currently missing from Tkinter!
+            self.tk.call("grid", "remove", self)
+        else:
+            self.grid()
+        tk.Scrollbar.set(self, lo, hi)
+    def pack(self, **kw):
+        raise TclError("cannot use pack with this widget")
+    def place(self, **kw):
+        raise TclError("cannot use place with this widget")
+
+
 def updateString(s):
     tmpstr = s.split(',')
     tmpstr = list(map(lambda x: x.lstrip(),tmpstr))
