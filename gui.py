@@ -798,6 +798,7 @@ class EncodeWindow(tk.Toplevel):
             return
         
 class CompareWindow(tk.Toplevel):
+    import pickle
     
     def __init__(self,master,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
@@ -827,11 +828,11 @@ class CompareWindow(tk.Toplevel):
         self.outputPath.grid(row=rio+1,column=cio+3,columnspan=3,**options)
         
         self.querrysource = tk.IntVar()
-        self.qsBox = tk.Checkbutton(self,text='Querry = Source',variable=self.querrysource)
+        self.qsBox = tk.Checkbutton(self,text='Querry = Source',variable=self.querrysource,command=self.enable_disable)
         self.qsBox.grid(row=rio+2,column=cio,**options)
                 
         self.sourcedb = tk.IntVar()
-        self.sdbBox = tk.Checkbutton(self,text='Source = media db',variable=self.sourcedb)
+        self.sdbBox = tk.Checkbutton(self,text='Source = media db',variable=self.sourcedb,command=self.enable_disable)
         self.sdbBox.grid(row=rio+2,column=cio+3,**options)
         
         self.inputList = tk.Listbox(self)
@@ -926,7 +927,7 @@ class CompareWindow(tk.Toplevel):
 #        hscrollbar.grid(row=1, column=0, sticky=E+W)
 
         self.resultCanvas = tk.Canvas(self, yscrollcommand=vscrollbar.set)
-        self.resultCanvas.grid(row=rrow+3, column=rcol,columnspan=5, **options)
+        self.resultCanvas.grid(row=rrow+3, column=rcol,columnspan=6, **options)
 
         vscrollbar.config(command=self.resultCanvas.yview)
  #       hscrollbar.config(command=canvas.xview)
@@ -936,14 +937,10 @@ class CompareWindow(tk.Toplevel):
         self.grid_columnconfigure(0, weight=1)
 
         # create canvas contents
-        self.resultframe = tk.Frame(self.resultCanvas)
+        self.resultframe = resultFrame(self.resultCanvas)
         self.resultframe.rowconfigure(1, weight=1)
         self.resultframe.columnconfigure(1, weight=1)     
         
-        for i in range(1, 5):
-            for j in range(1, 10):
-                button = tk.Button(self.resultframe, text="%d, %d" % (i,j))
-                button.grid(row=i, column=j, sticky='news')
         
         self.resultCanvas.create_window(0, 0, anchor='nw', window=self.resultframe)
         self.resultframe.update_idletasks()
@@ -960,14 +957,20 @@ class CompareWindow(tk.Toplevel):
         self.minScoreLabel.grid(row=rorow+1,column=rocol,columnspan=1,**options)
         self.minScoreEntry = tk.Entry(self)
         self.minScoreEntry.grid(row=rorow+1,column=rocol+1,columnspan=1,**options)
-        self.minScoreEntry.insert(tk.END,'70')       
+        self.minScoreEntry.insert(tk.END,'90')       
 
         self.maxScoreLabel = tk.Label(self,text='score max')
         self.maxScoreLabel.grid(row=rorow+2,column=rocol,columnspan=1,**options)
         self.maxScoreEntry = tk.Entry(self)
         self.maxScoreEntry.grid(row=rorow+2,column=rocol+1,columnspan=1,**options)
-        self.maxScoreEntry.insert(tk.END,'70')
+        self.maxScoreEntry.insert(tk.END,'100')
 
+    
+    def enable_disable(self):
+        if self.sourcedb.get() or self.querrysource.get():
+            self.outputPath.config(state='disabled')
+        else:
+            self.outputPath.config(state='normal')    
         
     def close(self,event):
         self.destroy()
@@ -975,8 +978,14 @@ class CompareWindow(tk.Toplevel):
     def check(self,event):
         import os
         
+        
         self.inp = self.inputPath.get()
-        self.outp = self.outputPath.get()
+        if self.querrysource.get():
+            self.outp = self.inp
+        elif self.sourcedb.get():
+            self.master.media_database.parent
+        else:
+            self.outp = self.outputPath.get()
         
         if not os.path.isdir(self.inp) or not os.path.isdir(self.outp):
             self.ready = False
@@ -1002,23 +1011,54 @@ class CompareWindow(tk.Toplevel):
         
     def encode(self,event):
         if self.ready:
-            self.error.set('')
+            self.error.set('querry 0/%d done' %len(infiles))
             self.infingerprints = []
             self.outfingerprints = []
-            for i in self.infiles:
-                self.infingerprints.append(self.get_video_descriptor(i,override=self.override))
+            for e,i in enumerate(self.infiles):
+                self.infingerprints.append((i,self.get_video_descriptor(i,override=self.override.get())))
+                self.error.set('querry %d/%d done' %(e,len(infiles)))
             
-            for i in self.outfiles:
-                self.outfingerprints.append(self.get_video_descriptor(i,override=self.override))
+            self.error.set('source 0/%d done' %len(outfiles))
+            for e,i in enumerate(self.outfiles):
+                self.outfingerprints.append((i,self.get_video_descriptor(i,override=self.override.get())))
+                self.error.set('source %d/%d done' %(e,len(infiles)))
             
+            res_file = str(hash(self.inp) + hash(self.outp))
+            res_file = res_file + '.res'
+            
+            
+            
+            self.error.set('matching 0/%d done' %len(infiles))
+           
+            if os.path.isfile(res_file) and not override:
+                with open(res_file, 'rb') as input:
+                    self.result = pickle.load(input)
+            else:
+                self.result = []
             import cv2            
             matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-            for i in self.infingerprints:
+            for e,i in enumerate(self.infingerprints):
                 for j in self.outfingerprints:
-                    print eacc.compare_clips(i,j,orb_matcher=matcher)
-                    if self.crossCheck:
-                        print eacc.compare_clips(j,i,orb_matcher=matcher)
+                    compute = True
+                    for k in self.result:
+                        if i[0] == k[0] and j[0] == k[1]:
+                            compute = False
                     
+                    if compute:
+                        self.result.append((i[0],j[0],eacc.compare_clips(i[1],j[1],orb_matcher=matcher)))
+                        
+                        if self.crossCheck.get():
+                            self.result.append((j[0],i[0],eacc.compare_clips(j[1],i[1],orb_matcher=matcher)))
+                        
+                        vmin = float(self.minScoreEntry.get())/100.0
+                        vmax = float(self.maxScoreEntry.get())/100.0
+                        self.resultFrame.update(self.result,vmin,vmax)
+                        
+                        with open(res_file, 'wb') as output:
+                            pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+                    else:
+                        self.error.set('matching %d/%d done' %(e,len(infiles)))
+           
         else:
             self.error.set('first check the given input and output folder')
             return    
@@ -1045,6 +1085,74 @@ class CompareWindow(tk.Toplevel):
         return new.join(li)
         
         
+        
+class resultFrame(tk.Frame):    
+    
+    def update(result,vmin,vmax):
+        for widget in self.winfo_children():
+            widget.destroy()
+        
+        row = 0
+        
+        for i in result:
+            s = max(i[2]['score']) 
+            if s >= vmin and s <= vmax:
+                t = resultElement(i[0],i[1],s)
+                t.grid(row=row,column=col,columnspan=5,rowspan=2)
+                
+class resultElement(tk.Frame):
+    
+    def __init__(self,querry,source,score,master=None):
+        tk.Frame.__init__(self,master)
+        self.querry = querry
+        self.querryE = me.video_entry(querry)
+        self.source = source
+        self.sourceE = me.video_entry(source)
+        self.score = score
+        self.grid()
+        self.createWidgets()
+        self.update()
+        
+    def createWidgets(self):
+        options = {'sticky':'NSEW','padx':3,'pady':3}        
+        self.querryLabel = tk.Label(self,text=os.path.split(self.querry)[-1])
+        self.querryLabel.grid(row=0,column=0,columnspan=2,**options)
+        self.sourceLabel = tk.Label(self,text=os.path.split(self.source)[-1])
+        self.sourceLabel.grid(row=0,column=3,columnspan=2,**options)
+
+        self.scoreLabel = tk.Label(self,text=str(int(self.score * 100)))
+        self.scoreLabel.grid(row=0,column=2,columnspan=1,**options)
+    
+        self.watchqButton = tk.Button(self,text='Watch')
+        self.watchqButton.grid(row=1,column=0,columnspan=2,**options)
+        self.watchqButton.bind("<Button-1>", self.watchQuerry)
+
+        self.watchsButton = tk.Button(self,text='Watch')
+        self.watchsButton.grid(row=1,column=3,columnspan=2,**options)
+        self.watchsButton.bind("<Button-1>", self.watchSource)
+
+        
+        self.deleteButton = tk.Button(self,text='Delete')
+        self.deleteButton.grid(row=1,column=2,columnspan=1,**options)
+        self.deleteButton.bind("<Button-1>", self.deleteQuerry)
+
+    def watchQuerry(self,event):
+        t = threading.Thread(target=self.querryE.execute)
+        t.setDaemon(True)
+        t.start() 
+
+    def watchSource(self,event):
+        t = threading.Thread(target=self.sourceE.execute)
+        t.setDaemon(True)
+        t.start() 
+    
+    def delete(self,event):
+        if tkMessageBox.askokcancel("Delete", 
+            "This will erase " + self.querryE.get_display_string() + " from the harddisk! Continue?"):
+            self.querryE.delete()
+            self.destroy()
+        else:
+            return
         
         
 class AutoScrollbar(tk.Scrollbar):
