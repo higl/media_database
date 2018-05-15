@@ -12,6 +12,8 @@ import media_entry as me
 import threading
 import eac.encode as eace
 import eac.compare as eacc
+import pickle
+import os
 
 class Application(tk.Tk):
     
@@ -798,7 +800,6 @@ class EncodeWindow(tk.Toplevel):
             return
         
 class CompareWindow(tk.Toplevel):
-    import pickle
     
     def __init__(self,master,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
@@ -894,7 +895,7 @@ class CompareWindow(tk.Toplevel):
         self.crossCheckBox.grid(row=orow+5,column=ocol,columnspan=2,**options)
 
         self.override = tk.IntVar()
-        self.overrideBox = tk.Checkbutton(self,text='override',variable=self.crossCheck)
+        self.overrideBox = tk.Checkbutton(self,text='override',variable=self.override)
         self.overrideBox.grid(row=orow+6,column=ocol,columnspan=2,**options)
         
         self.closeButton = tk.Button(self,text='Close')
@@ -922,25 +923,24 @@ class CompareWindow(tk.Toplevel):
         # create scrolled canvas
 
         vscrollbar = AutoScrollbar(self)
-        vscrollbar.grid(row=rrow+3, column=6, sticky='NSW')
-#        hscrollbar = AutoScrollbar(root, orient=HORIZONTAL)
-#        hscrollbar.grid(row=1, column=0, sticky=E+W)
+        vscrollbar.grid(row=rrow+3, column=rcol+6,rowspan=10, sticky='NSW')
+        hscrollbar = AutoScrollbar(self, orient=tk.HORIZONTAL)
+        hscrollbar.grid(row=rrow+14, column=rcol,columnspan=5, sticky='NSW')
 
-        self.resultCanvas = tk.Canvas(self, yscrollcommand=vscrollbar.set)
-        self.resultCanvas.grid(row=rrow+3, column=rcol,columnspan=6, **options)
+        self.resultCanvas = tk.Canvas(self, yscrollcommand=vscrollbar.set, xscrollcommand=hscrollbar.set)
+        self.resultCanvas.grid(row=rrow+3, column=rcol,rowspan=10,columnspan=5, **options)
 
         vscrollbar.config(command=self.resultCanvas.yview)
- #       hscrollbar.config(command=canvas.xview)
+        hscrollbar.config(command=self.resultCanvas.xview)
 
         # make the canvas expandable
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         # create canvas contents
-        self.resultframe = resultFrame(self.resultCanvas)
+        self.resultframe = resultFrame(master=self.resultCanvas)
         self.resultframe.rowconfigure(1, weight=1)
         self.resultframe.columnconfigure(1, weight=1)     
-        
         
         self.resultCanvas.create_window(0, 0, anchor='nw', window=self.resultframe)
         self.resultframe.update_idletasks()
@@ -964,6 +964,10 @@ class CompareWindow(tk.Toplevel):
         self.maxScoreEntry = tk.Entry(self)
         self.maxScoreEntry.grid(row=rorow+2,column=rocol+1,columnspan=1,**options)
         self.maxScoreEntry.insert(tk.END,'100')
+        
+        self.updateButton = tk.Button(self,text='update result')
+        self.updateButton.grid(row = rorow+3,column=rocol,columnspan=2,**options)
+        self.updateButton.bind("<Button-1>", self.update_result)
 
     
     def enable_disable(self):
@@ -976,14 +980,12 @@ class CompareWindow(tk.Toplevel):
         self.destroy()
 
     def check(self,event):
-        import os
-        
         
         self.inp = self.inputPath.get()
         if self.querrysource.get():
             self.outp = self.inp
         elif self.sourcedb.get():
-            self.master.media_database.parent
+            self.outp = self.master.media_database.parent
         else:
             self.outp = self.outputPath.get()
         
@@ -1010,96 +1012,121 @@ class CompareWindow(tk.Toplevel):
         self.error.set('')
         
     def encode(self,event):
+        t = threading.Thread(target=self.encode_thread)
+        t.setDaemon(True)
+        t.start()
+    
+    def encode_thread(self):
         if self.ready:
-            self.error.set('querry 0/%d done' %len(infiles))
+            self.error.set('querry 0/%d done' %len(self.infiles))
             self.infingerprints = []
             self.outfingerprints = []
-            for e,i in enumerate(self.infiles):
-                self.infingerprints.append((i,self.get_video_descriptor(i,override=self.override.get())))
-                self.error.set('querry %d/%d done' %(e,len(infiles)))
             
-            self.error.set('source 0/%d done' %len(outfiles))
+            
+            fps = int(self.fpsEntry.get())
+            nsec = fps * int(self.nsecEntry.get())
+            proc = int(self.procEntry.get())
+            quality = self.qualityEntry.get()
+            for e,i in enumerate(self.infiles):
+                desc = self.get_video_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
+                self.infingerprints.append((i,desc))
+                self.error.set('querry %d/%d done' %(e,len(self.infiles)))
+            
+            self.error.set('source 0/%d done' %len(self.outfiles))
             for e,i in enumerate(self.outfiles):
-                self.outfingerprints.append((i,self.get_video_descriptor(i,override=self.override.get())))
-                self.error.set('source %d/%d done' %(e,len(infiles)))
+                desc = self.get_video_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
+                self.outfingerprints.append((i,desc))
+                self.error.set('source %d/%d done' %(e,len(self.outfiles)))
             
             res_file = str(hash(self.inp) + hash(self.outp))
             res_file = res_file + '.res'
             
             
             
-            self.error.set('matching 0/%d done' %len(infiles))
+            self.error.set('matching 0/%d done' %len(self.infiles))
            
-            if os.path.isfile(res_file) and not override:
+            if os.path.isfile(res_file) and not self.override.get():
                 with open(res_file, 'rb') as input:
                     self.result = pickle.load(input)
             else:
                 self.result = []
             import cv2            
             matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+            
+            crosscheck = self.crossCheck.get()
             for e,i in enumerate(self.infingerprints):
                 for j in self.outfingerprints:
                     compute = True
                     for k in self.result:
                         if i[0] == k[0] and j[0] == k[1]:
                             compute = False
+                            break
                     
                     if compute:
                         self.result.append((i[0],j[0],eacc.compare_clips(i[1],j[1],orb_matcher=matcher)))
-                        
-                        if self.crossCheck.get():
+                        if crosscheck:
                             self.result.append((j[0],i[0],eacc.compare_clips(j[1],i[1],orb_matcher=matcher)))
                         
-                        vmin = float(self.minScoreEntry.get())/100.0
-                        vmax = float(self.maxScoreEntry.get())/100.0
-                        self.resultFrame.update(self.result,vmin,vmax)
-                        
-                        with open(res_file, 'wb') as output:
-                            pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
-                    else:
-                        self.error.set('matching %d/%d done' %(e,len(infiles)))
-           
+                
+                with open(res_file, 'wb') as output:
+                    pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+                self.error.set('matching %d/%d done' %(e,len(self.infiles)))       
+
         else:
             self.error.set('first check the given input and output folder')
             return    
     
-    def get_video_desciptor(file,override=False):
+    
+    def get_video_descriptor(self,file,fps=3,nsec=180,proc=1,quality='320x640',override=False):
         descriptor_file = self.rreplace(file,file.split('.')[-1],'dscr',1)
         
         if os.path.isfile(descriptor_file) and not override:
             with open(descriptor_file, 'rb') as input:
                 descriptor = pickle.load(input)
         else:
-            fps = int(self.fpsEntry.get())
-            nsec = fps * int(self.nsecEntry.get())
-            proc = int(self.procEntry.get())
-            
-            descriptor = eacc.get_video_descriptor(file,nfps=fps,nkey=nsec,processes=proc,quality=self.qualityEntry.get())
+            descriptor = eacc.get_video_descriptor(file,nfps=fps,nkey=nsec,processes=proc,quality=quality)
             with open(descriptor_file, 'wb') as output:
                 pickle.dump(descriptor, output, pickle.HIGHEST_PROTOCOL)
         
         return descriptor
         
-    def rreplace(s,old,new,number):
+    def rreplace(self,s,old,new,number):
         li = s.rsplit(old, number)
         return new.join(li)
         
+    def update_result(self,event):
+        vmin = float(self.minScoreEntry.get())/100.0
+        vmax = float(self.maxScoreEntry.get())/100.0
+        self.resultframe.update_widgets(self.result,vmin,vmax)
+        self.resultframe.update_idletasks()
+        self.resultCanvas.config(scrollregion=self.resultCanvas.bbox("all"))
         
         
 class resultFrame(tk.Frame):    
     
-    def update(result,vmin,vmax):
-        for widget in self.winfo_children():
-            widget.destroy()
+    def __init__(self,master=None):
+        tk.Frame.__init__(self,master)
+        self.resultList = []
+        self.grid()
         
+    def update_widgets(self,result,vmin,vmax):
+        self.clearLists()
+       
         row = 0
         
         for i in result:
-            s = max(i[2]['score']) 
-            if s >= vmin and s <= vmax:
-                t = resultElement(i[0],i[1],s)
-                t.grid(row=row,column=col,columnspan=5,rowspan=2)
-                
+            if len(i[2]['score'])>0:
+                s = max(i[2]['score']) 
+                if s >= vmin and s <= vmax:
+                    self.resultList.append(resultElement(i[0],i[1],s,master=self))
+                    self.resultList[-1].grid(row=row,column=0,columnspan=5,rowspan=2)
+                    row = row+2
+
+    def clearLists(self):
+        for l in self.resultList:
+            l.destroy()   
+        self.resultList = []
+        
 class resultElement(tk.Frame):
     
     def __init__(self,querry,source,score,master=None):
@@ -1111,7 +1138,6 @@ class resultElement(tk.Frame):
         self.score = score
         self.grid()
         self.createWidgets()
-        self.update()
         
     def createWidgets(self):
         options = {'sticky':'NSEW','padx':3,'pady':3}        
@@ -1146,7 +1172,7 @@ class resultElement(tk.Frame):
         t.setDaemon(True)
         t.start() 
     
-    def delete(self,event):
+    def deleteQuerry(self,event):
         if tkMessageBox.askokcancel("Delete", 
             "This will erase " + self.querryE.get_display_string() + " from the harddisk! Continue?"):
             self.querryE.delete()

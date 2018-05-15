@@ -221,10 +221,10 @@ def orb_detection(frame,orb=None):
     kp = orb.detect(frame,None)
     # compute the descriptors with ORB
     if len(kp)>0:
-        kp, des = orb.compute(frame, kb)
-        return des
+        kp, des = orb.compute(frame, kp)
+        return kp,des
     else:
-        return []
+        return [],[]
 
 
 def compare_frame(querry,source,wth=0.25,wcc=0.25,worb=0.5,qth=0.5,qcc=0.75,qorb=0.7,orb_matcher=None):
