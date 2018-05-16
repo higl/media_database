@@ -284,6 +284,7 @@ class SelectorFrame(tk.Frame):
             if len(self.attribs) < 4:
                 att = ['-','-','-','-']
                 att[:len(self.attribs)-1] = self.attribs[:]
+                self.attribs = att
                 
         self.LabelList = []
         self.EntryList = []
@@ -332,7 +333,8 @@ class SelectorFrame(tk.Frame):
             if len(self.attribs) < 4:
                 att = ['-','-','-','-']
                 att[:len(self.attribs)-1] = self.attribs[:]
-                
+                self.attribs = att
+  
         self.LabelList = []
         self.EntryList = []
         self.VarList = []
@@ -804,6 +806,8 @@ class CompareWindow(tk.Toplevel):
     def __init__(self,master,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
         self.ready = False
+        self.thread = None
+        self.abort = False
         self.grid()
         self.createWidgets()
         
@@ -898,10 +902,9 @@ class CompareWindow(tk.Toplevel):
         self.overrideBox = tk.Checkbutton(self,text='override',variable=self.override)
         self.overrideBox.grid(row=orow+6,column=ocol,columnspan=2,**options)
         
-        self.closeButton = tk.Button(self,text='Close')
-        self.closeButton.grid(row=orow+23,column=ocol, columnspan=2,**options)
-        self.closeButton.bind("<Button-1>", self.close)
-        
+        self.abortButton = tk.Button(self,text='Abort')
+        self.abortButton.grid(row=orow+23,column=ocol, columnspan=2,**options)
+        self.abortButton.bind("<Button-1>", self.abort_thread)
         
         # result block
         rrow = 25
@@ -964,12 +967,23 @@ class CompareWindow(tk.Toplevel):
         self.maxScoreEntry = tk.Entry(self)
         self.maxScoreEntry.grid(row=rorow+2,column=rocol+1,columnspan=1,**options)
         self.maxScoreEntry.insert(tk.END,'100')
+
+        self.ignoreSelf = tk.IntVar()
+        self.ignoreSelfBox = tk.Checkbutton(self,text='ignore self match',variable=self.ignoreSelf)
+        self.ignoreSelfBox.grid(row=rorow+3,column=rocol,columnspan=2,**options)
         
         self.updateButton = tk.Button(self,text='update result')
-        self.updateButton.grid(row = rorow+3,column=rocol,columnspan=2,**options)
+        self.updateButton.grid(row = rorow+4,column=rocol,columnspan=2,**options)
         self.updateButton.bind("<Button-1>", self.update_result)
 
-    
+        self.addButton = tk.Button(self,text='add to db')
+        self.addButton.grid(row = rorow+6,column=rocol,columnspan=2,**options)
+        self.addButton.bind("<Button-1>", self.add_result)        
+        
+        self.closeButton = tk.Button(self,text='Close')
+        self.closeButton.grid(row=rorow+23,column=rocol, columnspan=2,**options)
+        self.closeButton.bind("<Button-1>", self.close)
+        
     def enable_disable(self):
         if self.sourcedb.get() or self.querrysource.get():
             self.outputPath.config(state='disabled')
@@ -1012,9 +1026,12 @@ class CompareWindow(tk.Toplevel):
         self.error.set('')
         
     def encode(self,event):
-        t = threading.Thread(target=self.encode_thread)
-        t.setDaemon(True)
-        t.start()
+        if self.thread != None and self.thread.is_alive():
+            return
+        else:
+            self.thread = threading.Thread(target=self.encode_thread)
+            self.thread.setDaemon(True)
+            self.thread.start()
     
     def encode_thread(self):
         if self.ready:
@@ -1031,13 +1048,20 @@ class CompareWindow(tk.Toplevel):
                 desc = self.get_video_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
                 self.infingerprints.append((i,desc))
                 self.error.set('querry %d/%d done' %(e,len(self.infiles)))
+                if self.abort:
+                    self.error.set('source %d/%d done - aborted' %(e,len(self.infiles)))
+                    self.abort = False
+                    return
             
             self.error.set('source 0/%d done' %len(self.outfiles))
             for e,i in enumerate(self.outfiles):
                 desc = self.get_video_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
                 self.outfingerprints.append((i,desc))
                 self.error.set('source %d/%d done' %(e,len(self.outfiles)))
-            
+                if self.abort:
+                    self.error.set('source %d/%d done - aborted' %(e,len(self.outfiles)))
+                    self.abort = False
+                    return
             res_file = str(hash(self.inp) + hash(self.outp))
             res_file = res_file + '.res'
             
@@ -1049,28 +1073,39 @@ class CompareWindow(tk.Toplevel):
                 with open(res_file, 'rb') as input:
                     self.result = pickle.load(input)
             else:
-                self.result = []
+                self.result = {}
             import cv2            
             matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
             
             crosscheck = self.crossCheck.get()
             for e,i in enumerate(self.infingerprints):
+                if not self.result.has_key(i[0]):
+                    self.result[i[0]] = []
                 for j in self.outfingerprints:
                     compute = True
-                    for k in self.result:
-                        if i[0] == k[0] and j[0] == k[1]:
+                    for k in self.result[i[0]]:
+                        if k['source'] == j[0]:
                             compute = False
                             break
                     
                     if compute:
-                        self.result.append((i[0],j[0],eacc.compare_clips(i[1],j[1],orb_matcher=matcher)))
+                        res = eacc.compare_clips(i[1],j[1],orb_matcher=matcher)
+                        res['source'] = j[0]
+                        self.result[i[0]].append(res)
                         if crosscheck:
-                            self.result.append((j[0],i[0],eacc.compare_clips(j[1],i[1],orb_matcher=matcher)))
+                            res = eacc.compare_clips(j[1],i[1],orb_matcher=matcher)
+                            res['source'] = j[0]
+                            res['crosscheck'] = True
+                            self.result[i[0]].append(res)
                         
                 
                 with open(res_file, 'wb') as output:
                     pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
-                self.error.set('matching %d/%d done' %(e,len(self.infiles)))       
+                self.error.set('matching %d/%d done' %(e,len(self.infiles)))
+                if self.abort:
+                    self.error.set('matching %d/%d done - aborted' %(e,len(self.infiles)))
+                    self.abort = False
+                    return                
 
         else:
             self.error.set('first check the given input and output folder')
@@ -1097,11 +1132,47 @@ class CompareWindow(tk.Toplevel):
     def update_result(self,event):
         vmin = float(self.minScoreEntry.get())/100.0
         vmax = float(self.maxScoreEntry.get())/100.0
-        self.resultframe.update_widgets(self.result,vmin,vmax)
+        self.resultframe.update_widgets(self.result,vmin,vmax,ignoreSelf=self.ignoreSelf.get())
         self.resultframe.update_idletasks()
         self.resultCanvas.config(scrollregion=self.resultCanvas.bbox("all"))
+    
+    def abort_thread(self,event):
+        print self.thread, self.thread.is_alive()
+        if self.thread != None and self.thread.is_alive():
+            self.abort = True
+            
+    def add_result(self,event):
+        if not self.sourcedb.get():
+            self.error.set('results can only be added to the database, if they are compared to a database from the main window')
+            return
+        if tkMessageBox.askokcancel("Add to DB", 
+            "Do you really want to add all of the current result to the database? Any duplicate in there will also be copied!" ):
+            
+            for i in self.result.keys():
+                self.move_to_db(i,self.master.media_database)
+                self.result.pop(i)
+        else:
+            return
+    
+    def move_to_db(self,fi,db):
+        destination = db.parent
+        f = os.path.split(fi)[-1]
+        desc = self.rreplace(fi,fi.split('.')[-1],'dscr',1)
+ 
+        path = destination + '/' + os.path.splitext(f)[0]
+        i = 0
+        while os.path.isdir(path):
+            path = destination + '/' + os.path.splitext(f)[0] + '_' + str(i)
+            i = i+1
+            
+        os.mkdir(path)
         
+        os.rename(fi,path+'/'+f)
+        os.rename(desc,path+'/'+os.path.split(desc)[-1])
         
+        e = me.video_entry(path)
+        db.add_entry(e)
+                
 class resultFrame(tk.Frame):    
     
     def __init__(self,master=None):
@@ -1109,18 +1180,25 @@ class resultFrame(tk.Frame):
         self.resultList = []
         self.grid()
         
-    def update_widgets(self,result,vmin,vmax):
+    def update_widgets(self,result,vmin,vmax,ignoreSelf=False):
         self.clearLists()
        
         row = 0
         
-        for i in result:
-            if len(i[2]['score'])>0:
-                s = max(i[2]['score']) 
-                if s >= vmin and s <= vmax:
-                    self.resultList.append(resultElement(i[0],i[1],s,master=self))
-                    self.resultList[-1].grid(row=row,column=0,columnspan=5,rowspan=2)
-                    row = row+2
+        for i in sorted(result.keys()):
+            for j in result[i]:
+                if len(j['score'])>0:
+                    if ignoreSelf and i==j['source']:
+                        continue
+                    s = max(j['score']) 
+                    if s >= vmin and s <= vmax:
+                        if j.has_key('crosscheck'):
+                            self.resultList.append(resultElement(j['source'],i,s,master=self))
+                        else:
+                            self.resultList.append(resultElement(i,j['source'],s,master=self))
+                            
+                        self.resultList[-1].grid(row=row,column=0,columnspan=5,rowspan=2)
+                        row = row+2
 
     def clearLists(self):
         for l in self.resultList:

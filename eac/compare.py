@@ -26,6 +26,7 @@ def get_video_descriptor(video,nfps=3,quality='320x640',nkey=180,processes=1):
     #change resolution to MxN with N=2xM (ffmpeg option is -s 2*NxN) 
     outpath = tempfile.mkdtemp()
     output = outpath + "\\" + os.path.split(video)[-1]
+    output = rreplace(output,output.split('.')[-1],'mp4',1)
     encode.encode(video,outpath,inpath_is_file=True,quality=quality,processes=processes,options=['-r', nfps])
     
     fr,gfr,ts,te = get_keyframes(output,nkey,M=M,N=N,nfps=nfps)
@@ -377,4 +378,7 @@ def blockshaped(arr, nrows, ncols):
     return (arr.reshape(h//nrows, nrows, -1, ncols)
                .swapaxes(1,2)
                .reshape(-1, nrows, ncols))
-
+               
+def rreplace(s,old,new,number):
+    li = s.rsplit(old, number)
+    return new.join(li)
