@@ -995,13 +995,13 @@ class CompareWindow(tk.Toplevel):
 
     def check(self,event):
         
-        self.inp = self.inputPath.get()
+        self.inp = os.path.normpath(self.inputPath.get())
         if self.querrysource.get():
             self.outp = self.inp
         elif self.sourcedb.get():
             self.outp = self.master.media_database.parent
         else:
-            self.outp = self.outputPath.get()
+            self.outp = os.path.normpath(self.outputPath.get())
         
         if not os.path.isdir(self.inp) or not os.path.isdir(self.outp):
             self.ready = False
@@ -1113,7 +1113,7 @@ class CompareWindow(tk.Toplevel):
     
     
     def get_video_descriptor(self,file,fps=3,nsec=180,proc=1,quality='320x640',override=False):
-        descriptor_file = self.rreplace(file,file.split('.')[-1],'dscr',1)
+        descriptor_file = file+'.dscr'
         
         if os.path.isfile(descriptor_file) and not override:
             with open(descriptor_file, 'rb') as input:
@@ -1125,14 +1125,10 @@ class CompareWindow(tk.Toplevel):
         
         return descriptor
         
-    def rreplace(self,s,old,new,number):
-        li = s.rsplit(old, number)
-        return new.join(li)
-        
     def update_result(self,event):
         vmin = float(self.minScoreEntry.get())/100.0
         vmax = float(self.maxScoreEntry.get())/100.0
-        self.resultframe.update_widgets(self.result,vmin,vmax,ignoreSelf=self.ignoreSelf.get())
+        self.resultframe.update_widgets(self.result,vmin=vmin,vmax=vmax,ignoreSelf=self.ignoreSelf.get())
         self.resultframe.update_idletasks()
         self.resultCanvas.config(scrollregion=self.resultCanvas.bbox("all"))
     
@@ -1145,28 +1141,39 @@ class CompareWindow(tk.Toplevel):
         if not self.sourcedb.get():
             self.error.set('results can only be added to the database, if they are compared to a database from the main window')
             return
+        parent = os.path.normcase(self.master.media_database.parent)
+        if self.inp in parent:
+            self.error.set('the database cannot be part of the querry')
+            return
+            
         if tkMessageBox.askokcancel("Add to DB", 
             "Do you really want to add all of the current result to the database? Any duplicate in there will also be copied!" ):
             
             for i in self.result.keys():
                 self.move_to_db(i,self.master.media_database)
                 self.result.pop(i)
+                
+            res_file = str(hash(self.inp) + hash(self.outp))
+            res_file = res_file + '.res'
+            with open(res_file, 'wb') as output:
+                pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+
         else:
             return
     
     def move_to_db(self,fi,db):
         destination = db.parent
         f = os.path.split(fi)[-1]
-        desc = self.rreplace(fi,fi.split('.')[-1],'dscr',1)
+        desc = fi+'.dscr'
  
         path = destination + '/' + os.path.splitext(f)[0]
+        path = path.rstrip()
         i = 0
         while os.path.isdir(path):
-            path = destination + '/' + os.path.splitext(f)[0] + '_' + str(i)
+            path = destination + '/' + os.path.splitext(f)[0].rstrip() + '_' + str(i)
             i = i+1
             
         os.mkdir(path)
-        
         os.rename(fi,path+'/'+f)
         os.rename(desc,path+'/'+os.path.split(desc)[-1])
         
@@ -1179,23 +1186,31 @@ class resultFrame(tk.Frame):
         tk.Frame.__init__(self,master)
         self.resultList = []
         self.grid()
+        self.vmin = 0
+        self.vmax = 0
+        self.ignore = False
         
-    def update_widgets(self,result,vmin,vmax,ignoreSelf=False):
+    def update_widgets(self,result,vmin=0,vmax=0,ignoreSelf=None):
         self.clearLists()
-       
+        if vmin > 0:
+            self.vmin = vmin
+        if vmax > 0:
+            self.vmax = vmax
+        if ignoreSelf != None:
+            self.ignore = ignoreSelf
         row = 0
         
         for i in sorted(result.keys()):
             for j in result[i]:
                 if len(j['score'])>0:
-                    if ignoreSelf and i==j['source']:
+                    if self.ignore and i==j['source']:
                         continue
                     s = max(j['score']) 
-                    if s >= vmin and s <= vmax:
+                    if s >= self.vmin and s <= self.vmax:
                         if j.has_key('crosscheck'):
-                            self.resultList.append(resultElement(j['source'],i,s,master=self))
+                            self.resultList.append(resultElement(j['source'],i,s,master=self,result=result))
                         else:
-                            self.resultList.append(resultElement(i,j['source'],s,master=self))
+                            self.resultList.append(resultElement(i,j['source'],s,master=self,result=result))
                             
                         self.resultList[-1].grid(row=row,column=0,columnspan=5,rowspan=2)
                         row = row+2
@@ -1207,13 +1222,14 @@ class resultFrame(tk.Frame):
         
 class resultElement(tk.Frame):
     
-    def __init__(self,querry,source,score,master=None):
+    def __init__(self,querry,source,score,master=None,result=None):
         tk.Frame.__init__(self,master)
         self.querry = querry
         self.querryE = me.video_entry(querry)
         self.source = source
         self.sourceE = me.video_entry(source)
         self.score = score
+        self.result = result
         self.grid()
         self.createWidgets()
         
@@ -1254,6 +1270,8 @@ class resultElement(tk.Frame):
         if tkMessageBox.askokcancel("Delete", 
             "This will erase " + self.querryE.get_display_string() + " from the harddisk! Continue?"):
             self.querryE.delete()
+            self.result.pop(self.querry)
+            self.master.update(self.result)
             self.destroy()
         else:
             return
