@@ -716,91 +716,232 @@ class EncodeWindow(tk.Toplevel):
     def __init__(self,master,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
         self.ready = False
+        self.thread = None
         self.grid()
         self.createWidgets()
+        self.abort = False
         
     def createWidgets(self):
-        options = {'sticky':'NSEW','padx':3,'pady':3}      
+         options = {'sticky':'NSEW','padx':3,'pady':3}      
         
+
+        self.error = tk.StringVar()
+        self.errorLabel = tk.Label(self,textvariable=self.error)
+        self.errorLabel.grid(row=0,column=0,columnspan=8,**options)        
+        
+        #input, output
+        rio = 1
+        cio = 0
+        
+        self.inputLabel = tk.Label(self,text='Querry')
+        self.inputLabel.grid(row=rio,column=cio,columnspan=3,**options)
         self.inputPath = tk.Entry(self)
-        self.inputPath.grid(row=0,column=0,columnspan=10,**options)
+        self.inputPath.grid(row=rio+1,column=cio,columnspan=3,**options)
+        self.outputLabel = tk.Label(self,text='Source')
+        self.outputLabel.grid(row=rio,column=cio+3,columnspan=3,**options)
         self.outputPath = tk.Entry(self)
-        self.outputPath.grid(row=1,column=0,columnspan=10,**options)
-        
-        self.checkButton = tk.Button(self,text='Check')
-        self.checkButton.grid(row=0,column=11,**options)
-        self.checkButton.bind("<Button-1>", self.check)
+        self.outputPath.grid(row=rio+1,column=cio+3,columnspan=3,**options)
         
         self.inputList = tk.Listbox(self)
-        self.inputList.grid(row=2,column=0,rowspan=20,columnspan=5)
+        self.inputList.grid(row=rio+2,column=cio,rowspan=20,columnspan=2,**options)
         scrollbar = tk.Scrollbar(self)
-        scrollbar.grid(row=2,column=5,rowspan=20,sticky='NSW')
+        scrollbar.grid(row=rio+2,column=cio+2,rowspan=20,sticky='NSW')
         scrollbar.config(command=self.inputList.yview)   
         self.inputList.config(yscrollcommand=scrollbar.set)
         
         self.outputList = tk.Listbox(self)
-        self.outputList.grid(row=2,column=6,rowspan=20,columnspan=5)
+        self.outputList.grid(row=rio+2,column=cio+3,rowspan=20,columnspan=2,**options)
         scrollbar = tk.Scrollbar(self)
-        scrollbar.grid(row=2,column=11,rowspan=20,sticky='NSW')
+        scrollbar.grid(row=rio+2,column=cio+3+2,rowspan=20,sticky='NSW')
         scrollbar.config(command=self.outputList.yview)
         self.outputList.config(yscrollcommand=scrollbar.set)
         
-        self.encodeButton = tk.Button(self,text='Encode')
-        self.encodeButton.grid(row=22,column=0, columnspan=5,**options)
-        self.encodeButton.bind("<Button-1>", self.encode)
+        
+        self.checkpButton = tk.Button(self,text='Check Paths')
+        self.checkpButton.grid(row=rio+23,column=cio,columnspan=2,**options)
+        self.checkpButton.bind("<Button-1>", self.check_paths)
+        
+        self.compareButton = tk.Button(self,text='Encode')
+        self.compareButton.grid(row=rio+23,column=cio+3, columnspan=2,**options)
+        self.compareButton.bind("<Button-1>", self.encode)
+
+        self.checkeButton = tk.Button(self,text='Check Encode')
+        self.checkeButton.grid(row=rio+24,column=cio,columnspan=2,**options)
+        self.checkeButton.bind("<Button-1>", self.check_encode)
+        
+        self.finalizeButton = tk.Button(self,text='Finalize All')
+        self.finalizeButton.grid(row=rio+24,column=cio+3, columnspan=2,**options)
+        self.finalizeButton.bind("<Button-1>", self.finalize_all)
+        
+        
+        #options block
+        orow = 1
+        ocol = 7
+
+        self.optionLabel = tk.Label(self,text='Options:')
+        self.optionLabel.grid(row=orow,column=ocol,columnspan=2,**options)
+
+        self.qualityLabel = tk.Label(self,text='quality')
+        self.qualityLabel.grid(row=orow+1,column=ocol,columnspan=1,**options)
+        self.qualityEntry = tk.Entry(self)
+        self.qualityEntry.grid(row=orow+1,column=ocol+1,columnspan=1,**options)
+        self.qualityEntry.insert(tk.END,'low')
+        
+        self.procLabel = tk.Label(self,text='processors')
+        self.procLabel.grid(row=orow+2,column=ocol,columnspan=1,**options)
+        self.procEntry = tk.Entry(self)
+        self.procEntry.grid(row=orow+2,column=ocol+1,columnspan=1,**options)
+        self.procEntry.insert(tk.END,'4')
+
+        self.override = tk.IntVar()
+        self.overrideBox = tk.Checkbutton(self,text='override',variable=self.override)
+        self.overrideBox.grid(row=orow+3,column=ocol,columnspan=2,**options)
+        
+        self.abortButton = tk.Button(self,text='Abort')
+        self.abortButton.grid(row=orow+4,column=ocol, columnspan=2,**options)
+        self.abortButton.bind("<Button-1>", self.abort_thread)
         
         self.closeButton = tk.Button(self,text='Close')
-        self.closeButton.grid(row=22,column=5, columnspan=5,**options)
+        self.closeButton.grid(row=orow+24,column=ocol, columnspan=2,**options)
         self.closeButton.bind("<Button-1>", self.close)
-        
-        self.error = tk.StringVar()
-        self.errorLabel = tk.Label(self,textvariable=self.error)
-        self.errorLabel.grid(row=23,column=0,columnspan=10,sticky = 'NSEW',padx=3,pady=3)
 
+        
     def close(self,event):
         self.destroy()
 
-    def check(self,event):
-        import os
         
-        self.inp = self.inputPath.get()
-        self.outp = self.outputPath.get()
+    def check_paths(self,event):
+        
+        self.inp = os.path.normpath(self.inputPath.get())
+        self.outp = os.path.normpath(self.outputPath.get())
         
         if not os.path.isdir(self.inp) or not os.path.isdir(self.outp):
             self.ready = False
             self.error.set('Input and Output have to be folders')
             return
         
-        infiles  = eace.findFiles(self.inp,formats=eace.vformats)
-        outfiles = eace.findFiles(self.outp,formats=eace.vformats)
+        self.infiles  = eace.findFiles(self.inp,formats=eace.vformats)
+        self.outfiles = eace.findFiles(self.outp,formats=eace.vformats)
             
-        infiles = sorted(infiles)
-        outfiles = sorted(outfiles)
+        self.infiles = sorted(self.infiles)
+        self.outfiles = sorted(self.outfiles)
         
         self.inputList.delete(0,tk.END)
-        for i in infiles:
+        for i in self.infiles:
             self.inputList.insert(tk.END,i)
 
         self.outputList.delete(0,tk.END)
-        for i in outfiles:
+        for i in self.outfiles:
             self.outputList.insert(tk.END,i)
         
         self.ready = True
         self.error.set('')
         
+    def check_encode(self,event):
+        print 'we want a new window here'
+        
+    def finalize_all(self,event):
+        if tkMessageBox.askokcancel("Do you want to all that is already encoded?"):
+            if os.path.getsize(self.input) > os.path.getsize(self.output):
+                self.inputE.delete()
+                self.destroy()
+            else:
+                self.outputE.delete()
+                os.rename(self.input,self.output)
+                self.destroy()
+        else:
+            return
+        print 'we want to finalize all the encodings'
+    
     def encode(self,event):
+        if self.thread != None and self.thread.is_alive():
+            return
+        else:
+            self.thread = threading.Thread(target=self.encode_thread)
+            self.thread.setDaemon(True)
+            self.thread.start()
+    
+    def encode_thread():
         if self.ready:
+            quality = self.qualityEntry.get()
+            proc = int(self.procEntry.get())
+            override = self.override.get()
             self.error.set('')
-            kargs = {'quality':'low','encoder':'ffmpeg','processes':4,'audio':'mp4','override':False}
-            args = (self.inp,self.outp)
-            t = threading.Thread(target=eace.encode,kwargs=kargs,args=args)
-            t.setDaemon(True)
-            t.start()
-            #eace.encode(self.inp,self.outp,quality='low',encoder='ffmpeg',processes=1,audio='mp4',override=False)
+            for i in self.inputList:
+                eace.encode(i,self.outp,inpath_is_file=True,quality=quality,encoder='ffmpeg',processes=proc,audio='mp4',override=False)
+            if self.abort:
+                self.abort = False
+                return
         else:
             self.error.set('first check the given input and output folder')
             return
+
+    def abort_thread(self,event):
+        print self.thread, self.thread.is_alive()
+        if self.thread != None and self.thread.is_alive():
+            self.abort = True
+            
+class CheckWindow(tk.Toplevel):
+    
+    def __init__(self,input,output,master=None,result=None,*args,**kwargs):
+        tk.Toplevel.__init__(self,master=master,*args,**kwargs)
+        self.input = input
+        self.inputE = me.video_entry(input)
+        self.output = output
+        self.outputE = me.video_entry(output)
+        self.grid()
+        self.createWidgets()    
+
+    def createWidgets(self):
+        options = {'sticky':'NSEW','padx':3,'pady':3} 
         
+        self.watchqButton = tk.Button(self,text='Watch Input')
+        self.watchqButton.grid(row=0,column=0,columnspan=2,**options)
+        self.watchqButton.bind("<Button-1>", self.watchInput)
+
+        self.watchsButton = tk.Button(self,text='Watch Output')
+        self.watchsButton.grid(row=0,column=3,columnspan=2,**options)
+        self.watchsButton.bind("<Button-1>", self.watchOutput)
+
+        
+        self.rejectButton = tk.Button(self,text='Reject')
+        self.rejectButton.grid(row=1,column=0,columnspan=2,**options)
+        self.rejectButton.bind("<Button-1>", self.reject)
+
+        self.finalizeButton = tk.Button(self,text='Finalize')
+        self.finalizeButton.grid(row=1,column=3,columnspan=2,**options)
+        self.finalizeButton.bind("<Button-1>", self.finalize)        
+        
+    def watchInput(self,event):
+        t = threading.Thread(target=self.inputE.execute)
+        t.setDaemon(True)
+        t.start() 
+
+    def watchOutput(self,event):
+        t = threading.Thread(target=self.outputE.execute)
+        t.setDaemon(True)
+        t.start() 
+    
+    def reject(self,event):
+        if tkMessageBox.askokcancel("Delete", 
+            "This will erase " + self.outputE.get_display_string() + " from the harddisk! Continue?"):
+            self.outputE.delete()
+            self.destroy()
+        else:
+            return
+
+    def finalize(self,event):
+        if tkMessageBox.askokcancel("Do you want to finalize "+ self.input+ " ?"):
+            if os.path.getsize(self.input) > os.path.getsize(self.output):
+                self.inputE.delete()
+                self.destroy()
+            else:
+                self.outputE.delete()
+                os.rename(self.input,self.output)
+                self.destroy()
+        else:
+            return
+            
 class CompareWindow(tk.Toplevel):
     
     def __init__(self,master,*args,**kwargs):
