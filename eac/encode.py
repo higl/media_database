@@ -14,7 +14,7 @@ def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',pr
     
     #\\TODO clean that up and make it useable
     video_quality_presets = {
-        'low': ['-c:v', 'mpeg4', '-sws_flags', 'bilinear', '-vf', 'scale=640:-1', '-qmin', '6', '-qmax', '9','-r', 30],
+        'low': ['-c:v', 'mpeg4', '-sws_flags', 'bilinear', '-vf', 'scale=640:-1', '-qmin', '6', '-qmax', '9','-r', '30'],
         '320x640': ['-c:v', 'mpeg4', '-sws_flags', 'bilinear', '-vf', 'scale=320:640', '-qmin', '6', '-qmax', '9'],
         'qcif': ['-c:v', 'mpeg4', '-sws_flags', 'bilinear', '-vf', 'scale=72:144', '-qmin', '6', '-qmax', '9']
     }
@@ -47,7 +47,7 @@ def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',pr
         if override:
             i = 1
             while os.path.isfile(output):
-                output = os.path.splitext(outpath + os.path.split(inp)[-1])[0] + '_' + str(i) + os.path.splitext(output)[1]
+                output = os.path.splitext(outpath + "\\" +os.path.split(inp)[-1])[0] + '_' + str(i) + os.path.splitext(output)[1]
                 i += 1
             
         ffmpegopts += [output]
@@ -57,9 +57,12 @@ def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',pr
                       }
         with tempfile.TemporaryFile() as stdout:
             try:
+                print [type(i) for i in encodercall[encoder]]
                 subprocess.check_call(encodercall[encoder])
             except subprocess.CalledProcessError as e:
                 pass
+                
+        return output
 
 def findFiles(path,formats=()):
     list = []

@@ -717,12 +717,13 @@ class EncodeWindow(tk.Toplevel):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
         self.ready = False
         self.thread = None
+        self.result = {}
         self.grid()
         self.createWidgets()
         self.abort = False
         
     def createWidgets(self):
-         options = {'sticky':'NSEW','padx':3,'pady':3}      
+        options = {'sticky':'NSEW','padx':3,'pady':3}      
         
 
         self.error = tk.StringVar()
@@ -791,15 +792,24 @@ class EncodeWindow(tk.Toplevel):
         self.procLabel.grid(row=orow+2,column=ocol,columnspan=1,**options)
         self.procEntry = tk.Entry(self)
         self.procEntry.grid(row=orow+2,column=ocol+1,columnspan=1,**options)
-        self.procEntry.insert(tk.END,'4')
+        self.procEntry.insert(0,'4')
 
         self.override = tk.IntVar()
         self.overrideBox = tk.Checkbutton(self,text='override',variable=self.override)
         self.overrideBox.grid(row=orow+3,column=ocol,columnspan=2,**options)
-        
+
+        self.extend = tk.IntVar()
+        self.extendBox = tk.Checkbutton(self,text='extend filenames',variable=self.extend)
+        self.extendBox.grid(row=orow+4,column=ocol,columnspan=2,**options)
+        self.extendBox.select()
+                
         self.abortButton = tk.Button(self,text='Abort')
-        self.abortButton.grid(row=orow+4,column=ocol, columnspan=2,**options)
+        self.abortButton.grid(row=orow+5,column=ocol, columnspan=2,**options)
         self.abortButton.bind("<Button-1>", self.abort_thread)
+        
+        self.emptyButton = tk.Button(self,text='Rm empty folders')
+        self.emptyButton.grid(row=orow+6,column=ocol, columnspan=2,**options)
+        self.emptyButton.bind("<Button-1>", self.rm_empty_folders)
         
         self.closeButton = tk.Button(self,text='Close')
         self.closeButton.grid(row=orow+24,column=ocol, columnspan=2,**options)
@@ -809,9 +819,26 @@ class EncodeWindow(tk.Toplevel):
     def close(self,event):
         self.destroy()
 
+    def rm_empty_folders(self,event):
+        w = os.walk(self.inp)
+        dirs = w[1]
+        path = w[0]
+        for i in dirs:
+            i = os.path.join(path, i)
+            try:
+                os.rmdir(i)
+            except:
+                pass
+        for i in os.walk(self.outp)[1]:
+            try:
+                os.rmdir(i)
+            except:
+                pass
+            
+    def check_paths(self,event):        
+        self.update(load=True)
         
-    def check_paths(self,event):
-        
+    def update(self,load=False):
         self.inp = os.path.normpath(self.inputPath.get())
         self.outp = os.path.normpath(self.outputPath.get())
         
@@ -834,50 +861,92 @@ class EncodeWindow(tk.Toplevel):
         for i in self.outfiles:
             self.outputList.insert(tk.END,i)
         
+        self.resultfile = str(hash(self.inp) + hash(self.outp))+'.encode'
+        
+        if load:
+            if os.path.isfile(self.resultfile) and not self.override.get():
+                with open(self.resultfile, 'rb') as input:
+                    self.result = pickle.load(input)
+            else:
+                self.result = {}
+
         self.ready = True
         self.error.set('')
+
         
     def check_encode(self,event):
-        print 'we want a new window here'
-        
-    def finalize_all(self,event):
-        if tkMessageBox.askokcancel("Do you want to all that is already encoded?"):
-            if os.path.getsize(self.input) > os.path.getsize(self.output):
-                self.inputE.delete()
-                self.destroy()
+        s = self.getSelected()
+        if s != None:
+            if s == '':
+                self.error.set('cannot check result for this entry (no result available)')
             else:
-                self.outputE.delete()
-                os.rename(self.input,self.output)
-                self.destroy()
+                self.CheckWindow = CheckWindow(s,self.result[s],result=self.result,master=self)
         else:
-            return
-        print 'we want to finalize all the encodings'
-    
+            #we take the first element in the input listbox
+            s = self.result.keys()[0]
+            self.CheckWindow = CheckWindow(s,self.result[s],result=self.result,master=self)
+
+            
+    def getSelected(self):
+        s = self.inputList.curselection()
+        if len(s) == 0:
+            return None 
+        else:
+            value = self.inputList.get(s[0])        
+            if self.result.has_key(value):
+                return value
+            else:
+                self.inputList.selection_clear(0, END)
+                return ''
+            
+    def finalize_all(self,event):
+        for i in self.result.keys():
+            if os.path.getsize(i) > os.path.getsize(self.result[i]):
+                os.remove(i)
+            else:
+                os.remove(self.result[i])
+                os.rename(i,self.result[i])
+            
+            self.result.pop[i]
+
+        with open(self.resultfile, 'wb') as output:
+            pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+        self.update()
+               
+        
     def encode(self,event):
         if self.thread != None and self.thread.is_alive():
             return
         else:
-            self.thread = threading.Thread(target=self.encode_thread)
+            kwargs = {}
+            kwargs['quality'] = self.qualityEntry.get()
+            kwargs['proc'] = self.procEntry.get()
+            kwargs['extend'] = self.extend.get()
+
+            self.thread = threading.Thread(target=self.encode_thread,kwargs=kwargs)
             self.thread.setDaemon(True)
             self.thread.start()
     
-    def encode_thread():
+    def encode_thread(self,quality='low',proc='4',extend=True):
         if self.ready:
-            quality = self.qualityEntry.get()
-            proc = int(self.procEntry.get())
-            override = self.override.get()
             self.error.set('')
-            for i in self.inputList:
-                eace.encode(i,self.outp,inpath_is_file=True,quality=quality,encoder='ffmpeg',processes=proc,audio='mp4',override=False)
-            if self.abort:
-                self.abort = False
-                return
+            for i in self.infiles:
+                if self.result.has_key(i):
+                    continue
+                    
+                out = eace.encode(i,self.outp,inpath_is_file=True,quality=quality,encoder='ffmpeg',processes=proc,audio='mp4',override=extend)
+                self.result[i] = out
+                with open(self.resultfile, 'wb') as output:
+                    pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+
+                if self.abort:
+                    self.abort = False
+                    return
         else:
             self.error.set('first check the given input and output folder')
             return
 
     def abort_thread(self,event):
-        print self.thread, self.thread.is_alive()
         if self.thread != None and self.thread.is_alive():
             self.abort = True
             
@@ -889,6 +958,7 @@ class CheckWindow(tk.Toplevel):
         self.inputE = me.video_entry(input)
         self.output = output
         self.outputE = me.video_entry(output)
+        self.result = result
         self.grid()
         self.createWidgets()    
 
@@ -925,20 +995,24 @@ class CheckWindow(tk.Toplevel):
     def reject(self,event):
         if tkMessageBox.askokcancel("Delete", 
             "This will erase " + self.outputE.get_display_string() + " from the harddisk! Continue?"):
-            self.outputE.delete()
+            os.remove(self.output)
+            self.result.pop[self.input]
+            self.master.update()
             self.destroy()
         else:
             return
 
     def finalize(self,event):
-        if tkMessageBox.askokcancel("Do you want to finalize "+ self.input+ " ?"):
+        if tkMessageBox.askokcancel("Finalize","Do you want to finalize "+ self.input+ " ?"):
             if os.path.getsize(self.input) > os.path.getsize(self.output):
-                self.inputE.delete()
-                self.destroy()
+                os.remove(self.input)
             else:
-                self.outputE.delete()
+                os.remove(self.output)
                 os.rename(self.input,self.output)
-                self.destroy()
+            
+            self.destroy()
+            self.result.pop[self.input]
+            self.master.update()
         else:
             return
             
