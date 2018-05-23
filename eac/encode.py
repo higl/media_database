@@ -57,7 +57,6 @@ def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',pr
                       }
         with tempfile.TemporaryFile() as stdout:
             try:
-                print [type(i) for i in encodercall[encoder]]
                 subprocess.check_call(encodercall[encoder])
             except subprocess.CalledProcessError as e:
                 pass

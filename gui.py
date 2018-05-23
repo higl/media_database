@@ -721,6 +721,7 @@ class EncodeWindow(tk.Toplevel):
         self.grid()
         self.createWidgets()
         self.abort = False
+        self.protocol("WM_DELETE_WINDOW", self.onClose)
         
     def createWidgets(self):
         options = {'sticky':'NSEW','padx':3,'pady':3}      
@@ -734,11 +735,11 @@ class EncodeWindow(tk.Toplevel):
         rio = 1
         cio = 0
         
-        self.inputLabel = tk.Label(self,text='Querry')
+        self.inputLabel = tk.Label(self,text='Input')
         self.inputLabel.grid(row=rio,column=cio,columnspan=3,**options)
         self.inputPath = tk.Entry(self)
         self.inputPath.grid(row=rio+1,column=cio,columnspan=3,**options)
-        self.outputLabel = tk.Label(self,text='Source')
+        self.outputLabel = tk.Label(self,text='Output')
         self.outputLabel.grid(row=rio,column=cio+3,columnspan=3,**options)
         self.outputPath = tk.Entry(self)
         self.outputPath.grid(row=rio+1,column=cio+3,columnspan=3,**options)
@@ -820,25 +821,25 @@ class EncodeWindow(tk.Toplevel):
         self.destroy()
 
     def rm_empty_folders(self,event):
-        w = os.walk(self.inp)
-        dirs = w[1]
-        path = w[0]
-        for i in dirs:
-            i = os.path.join(path, i)
-            try:
-                os.rmdir(i)
-            except:
-                pass
-        for i in os.walk(self.outp)[1]:
-            try:
-                os.rmdir(i)
-            except:
-                pass
+        for root, dirs, files in os.walk(self.inp, topdown=False):
+            for i in dirs:
+                i = os.path.join(root, i)
+                try:
+                    os.rmdir(i)
+                except:
+                    pass
+        for root, dirs, files in os.walk(self.outp, topdown=False):
+            for i in dirs:
+                i = os.path.join(root, i)
+                try:
+                    os.rmdir(i)
+                except:
+                    pass
             
     def check_paths(self,event):        
         self.update(load=True)
         
-    def update(self,load=False):
+    def update(self,load=False,remove=None):
         self.inp = os.path.normpath(self.inputPath.get())
         self.outp = os.path.normpath(self.outputPath.get())
         
@@ -869,7 +870,8 @@ class EncodeWindow(tk.Toplevel):
                     self.result = pickle.load(input)
             else:
                 self.result = {}
-
+        if remove != None:
+            self.result.pop(remove)
         self.ready = True
         self.error.set('')
 
@@ -883,9 +885,11 @@ class EncodeWindow(tk.Toplevel):
                 self.CheckWindow = CheckWindow(s,self.result[s],result=self.result,master=self)
         else:
             #we take the first element in the input listbox
-            s = self.result.keys()[0]
-            self.CheckWindow = CheckWindow(s,self.result[s],result=self.result,master=self)
-
+            if len(self.result.keys()) > 0:
+                s = self.result.keys()[0]
+                self.CheckWindow = CheckWindow(s,self.result[s],result=self.result,master=self)
+            else:
+                self.error.set('cannot check result (no results available')
             
     def getSelected(self):
         s = self.inputList.curselection()
@@ -907,7 +911,7 @@ class EncodeWindow(tk.Toplevel):
                 os.remove(self.result[i])
                 os.rename(i,self.result[i])
             
-            self.result.pop[i]
+            self.result.pop(i)
 
         with open(self.resultfile, 'wb') as output:
             pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
@@ -950,6 +954,14 @@ class EncodeWindow(tk.Toplevel):
         if self.thread != None and self.thread.is_alive():
             self.abort = True
             
+    def onClose(self):
+        if self.thread != None and self.thread.is_alive():
+            self.abort = True
+            self.thread.join()
+            self.destroy()
+        else:
+            self.destroy()
+            
 class CheckWindow(tk.Toplevel):
     
     def __init__(self,input,output,master=None,result=None,*args,**kwargs):
@@ -958,7 +970,6 @@ class CheckWindow(tk.Toplevel):
         self.inputE = me.video_entry(input)
         self.output = output
         self.outputE = me.video_entry(output)
-        self.result = result
         self.grid()
         self.createWidgets()    
 
@@ -996,8 +1007,7 @@ class CheckWindow(tk.Toplevel):
         if tkMessageBox.askokcancel("Delete", 
             "This will erase " + self.outputE.get_display_string() + " from the harddisk! Continue?"):
             os.remove(self.output)
-            self.result.pop[self.input]
-            self.master.update()
+            self.master.update(remove = self.input)
             self.destroy()
         else:
             return
@@ -1010,9 +1020,8 @@ class CheckWindow(tk.Toplevel):
                 os.remove(self.output)
                 os.rename(self.input,self.output)
             
+            self.master.update(remove = self.input)
             self.destroy()
-            self.result.pop[self.input]
-            self.master.update()
         else:
             return
             
@@ -1025,6 +1034,7 @@ class CompareWindow(tk.Toplevel):
         self.abort = False
         self.grid()
         self.createWidgets()
+        self.protocol("WM_DELETE_WINDOW", self.onClose)
         
     def createWidgets(self):
         options = {'sticky':'NSEW','padx':3,'pady':3}      
@@ -1348,7 +1358,6 @@ class CompareWindow(tk.Toplevel):
         self.resultCanvas.config(scrollregion=self.resultCanvas.bbox("all"))
     
     def abort_thread(self,event):
-        print self.thread, self.thread.is_alive()
         if self.thread != None and self.thread.is_alive():
             self.abort = True
             
@@ -1394,6 +1403,14 @@ class CompareWindow(tk.Toplevel):
         
         e = me.video_entry(path)
         db.add_entry(e)
+        
+    def onClose(self):
+        if self.thread != None and self.thread.is_alive():
+            self.abort = True
+            self.thread.join()
+            self.destroy()
+        else:
+            self.destroy()
                 
 class resultFrame(tk.Frame):    
     
