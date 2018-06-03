@@ -1314,7 +1314,6 @@ class CompareWindow(tk.Toplevel):
             crosscheck = self.crossCheck.get()
             
             #cleanup old results:
-            import time
             for i in self.result.keys():
                 found = False
                 for j in self.infingerprints:
@@ -1325,7 +1324,6 @@ class CompareWindow(tk.Toplevel):
                     self.result.pop(i)
             #compute the new results
             for e,i in enumerate(self.infingerprints):
-                t3 = time.time()
                 if not self.result.has_key(i[0]):
                     self.result[i[0]] = []
                     compute = np.ones(len(self.outfingerprints))
@@ -1357,8 +1355,6 @@ class CompareWindow(tk.Toplevel):
                                 self.result[i[0]].pop(en)
                                 break
                 save = False
-                t4 = time.time()
-                print i[0], len(self.result[i[0]]),len(compute),np.sum(compute), t4-t3
                 
                 for k,j in enumerate(outlist): 
                     if compute[k]:
