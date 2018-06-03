@@ -14,6 +14,7 @@ import eac.encode as eace
 import eac.compare as eacc
 import pickle
 import os
+import numpy as np
 
 class Application(tk.Tk):
     
@@ -872,6 +873,9 @@ class EncodeWindow(tk.Toplevel):
                 self.result = {}
         if remove != None:
             self.result.pop(remove)
+            with open(self.resultfile, 'wb') as output:
+                pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+                
         self.ready = True
         self.error.set('')
 
@@ -971,6 +975,11 @@ class CheckWindow(tk.Toplevel):
         self.output = output
         self.outputE = me.video_entry(output)
         self.grid()
+        x = master.winfo_rootx()
+        y = master.winfo_rooty()
+        height = master.winfo_height()
+        geom = "+%d+%d" % (x,y+height)
+        self.geometry( geom )
         self.createWidgets()    
 
     def createWidgets(self):
@@ -1267,7 +1276,7 @@ class CompareWindow(tk.Toplevel):
             
             fps = int(self.fpsEntry.get())
             nsec = fps * int(self.nsecEntry.get())
-            proc = int(self.procEntry.get())
+            proc = self.procEntry.get()
             quality = self.qualityEntry.get()
             for e,i in enumerate(self.infiles):
                 desc = self.get_video_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
@@ -1303,17 +1312,56 @@ class CompareWindow(tk.Toplevel):
             matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
             
             crosscheck = self.crossCheck.get()
+            
+            #cleanup old results:
+            import time
+            for i in self.result.keys():
+                found = False
+                for j in self.infingerprints:
+                    if i == j[0]:
+                        found = True
+                        break
+                if not found:
+                    self.result.pop(i)
+            #compute the new results
             for e,i in enumerate(self.infingerprints):
+                t3 = time.time()
                 if not self.result.has_key(i[0]):
                     self.result[i[0]] = []
-                for j in self.outfingerprints:
-                    compute = True
-                    for k in self.result[i[0]]:
-                        if k['source'] == j[0]:
-                            compute = False
+                    compute = np.ones(len(self.outfingerprints))
+                    outlist = sorted(self.outfingerprints, key=lambda x: x[0])
+                else:
+                    compute = np.ones(len(self.outfingerprints))
+                    outlist = sorted(self.outfingerprints, key=lambda x: x[0])
+                    reslist = sorted([l['source'] for l in self.result[i[0]]])
+                    offset = 0
+                    for k,l in enumerate(outlist):
+                        if k-offset >= len(reslist):
                             break
-                    
-                    if compute:
+                        check = sorted([l[0],reslist[k-offset]])
+                        while l[0] != reslist[k-offset] and check[0] != l[0]:
+                            for en,t in enumerate(self.result[i[0]]):
+                                if t['source'] == check[0]:
+                                    self.result[i[0]].pop(en)
+                                    break
+                            offset = offset - 1
+                            check = sorted([l[0],reslist[k-offset]])
+                        
+                        if l[0] == reslist[k-offset]:
+                            compute[k] = 0
+                        else:
+                            offset = offset + 1
+                    for l in reslist[k-offset:]:
+                        for en,t in enumerate(self.result[i[0]]):
+                            if t['source'] == check[0]:
+                                self.result[i[0]].pop(en)
+                                break
+                save = False
+                t4 = time.time()
+                print i[0], len(self.result[i[0]]),len(compute),np.sum(compute), t4-t3
+                
+                for k,j in enumerate(outlist): 
+                    if compute[k]:
                         res = eacc.compare_clips(i[1],j[1],orb_matcher=matcher)
                         res['source'] = j[0]
                         self.result[i[0]].append(res)
@@ -1322,10 +1370,11 @@ class CompareWindow(tk.Toplevel):
                             res['source'] = j[0]
                             res['crosscheck'] = True
                             self.result[i[0]].append(res)
+                        save = True
                         
-                
-                with open(res_file, 'wb') as output:
-                    pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+                if save:
+                    with open(res_file, 'wb') as output:
+                        pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
                 self.error.set('matching %d/%d done' %(e,len(self.infiles)))
                 if self.abort:
                     self.error.set('matching %d/%d done - aborted' %(e,len(self.infiles)))
@@ -1440,7 +1489,7 @@ class resultFrame(tk.Frame):
                     s = max(j['score']) 
                     if s >= self.vmin and s <= self.vmax:
                         if j.has_key('crosscheck'):
-                            self.resultList.append(resultElement(j['source'],i,s,master=self,result=result))
+                            self.resultList.append(resultElement(i,j['source'],s,master=self,result=result))
                         else:
                             self.resultList.append(resultElement(i,j['source'],s,master=self,result=result))
                             
