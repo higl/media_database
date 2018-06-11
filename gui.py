@@ -674,7 +674,7 @@ class StatisticsWindow(tk.Toplevel):
         self.attribList.bind("<<ListboxSelect>>", self.displayStat)
 
 
-        self.statList = tk.Listbox(self)
+        self.statList = tk.Listbox(self,width=25)
         self.statList.grid(row=0,column=4,rowspan=20,columnspan=6)
         scrollbar_stat = tk.Scrollbar(self)
         scrollbar_stat.grid(row=0,column=11,rowspan=20,sticky='NSW')
@@ -703,13 +703,7 @@ class StatisticsWindow(tk.Toplevel):
         
         self.statList.delete(0,tk.END)
         for i in sort:
-            pad = 25 - len(i[0]) - len(str(i[1]))
-            if pad <= 0:
-                st = i[0] + str(i[1])
-            else:
-                st = i[0].ljust(len(i[0])+pad) + str(i[1])
-
-            self.statList.insert(tk.END,st)
+            self.statList.insert(tk.END,'{:<25}{:>5}'.format(i[0],str(i[1])))
 
 
 class EncodeWindow(tk.Toplevel):
@@ -1162,7 +1156,7 @@ class CompareWindow(tk.Toplevel):
         vscrollbar = AutoScrollbar(self)
         vscrollbar.grid(row=rrow+3, column=rcol+6,rowspan=10, sticky='NSW')
         hscrollbar = AutoScrollbar(self, orient=tk.HORIZONTAL)
-        hscrollbar.grid(row=rrow+14, column=rcol,columnspan=5, sticky='NSW')
+        hscrollbar.grid(row=rrow+14, column=rcol,columnspan=10, sticky='NSW')
 
         self.resultCanvas = tk.Canvas(self, yscrollcommand=vscrollbar.set, xscrollcommand=hscrollbar.set)
         self.resultCanvas.grid(row=rrow+3, column=rcol,rowspan=10,columnspan=5, **options)
@@ -1512,24 +1506,34 @@ class resultElement(tk.Frame):
         
     def createWidgets(self):
         options = {'sticky':'NSEW','padx':3,'pady':3}        
-        self.querryLabel = tk.Label(self,text=os.path.split(self.querry)[-1])
+        
+        q = os.path.split(self.querry)[-1]
+        if len(q) > 30:
+            self.querryLabel = tk.Label(self,text=q[:27]+'...',width = 30)
+        else:
+            self.querryLabel = tk.Label(self,text=q,width = 30)
         self.querryLabel.grid(row=0,column=0,columnspan=2,**options)
-        self.sourceLabel = tk.Label(self,text=os.path.split(self.source)[-1])
+        
+        s = os.path.split(self.source)[-1]
+        if len(s) > 30:
+            self.sourceLabel = tk.Label(self,text=s[:27]+'...',width = 30)
+        else:
+            self.sourceLabel = tk.Label(self,text=s,width = 30)
         self.sourceLabel.grid(row=0,column=3,columnspan=2,**options)
 
-        self.scoreLabel = tk.Label(self,text=str(int(self.score * 100)))
+        self.scoreLabel = tk.Label(self,text=str(int(self.score * 100)),width = 5)
         self.scoreLabel.grid(row=0,column=2,columnspan=1,**options)
     
-        self.watchqButton = tk.Button(self,text='Watch')
+        self.watchqButton = tk.Button(self,text='Watch',width = 5)
         self.watchqButton.grid(row=1,column=0,columnspan=2,**options)
         self.watchqButton.bind("<Button-1>", self.watchQuerry)
 
-        self.watchsButton = tk.Button(self,text='Watch')
+        self.watchsButton = tk.Button(self,text='Watch',width = 5)
         self.watchsButton.grid(row=1,column=3,columnspan=2,**options)
         self.watchsButton.bind("<Button-1>", self.watchSource)
 
         
-        self.deleteButton = tk.Button(self,text='Delete')
+        self.deleteButton = tk.Button(self,text='Delete',width = 5)
         self.deleteButton.grid(row=1,column=2,columnspan=1,**options)
         self.deleteButton.bind("<Button-1>", self.deleteQuerry)
 
@@ -1548,7 +1552,7 @@ class resultElement(tk.Frame):
             "This will erase " + self.querryE.get_display_string() + " from the harddisk! Continue?"):
             self.querryE.delete()
             self.result.pop(self.querry)
-            self.master.update(self.result)
+            self.master.update_widgets(self.result)
             self.destroy()
         else:
             return
