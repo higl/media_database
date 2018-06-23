@@ -746,7 +746,7 @@ class EncodeWindow(tk.Toplevel):
         scrollbar.config(command=self.inputList.yview)   
         self.inputList.config(yscrollcommand=scrollbar.set)
         
-        self.outputList = tk.Listbox(self)
+        self.outputList = tk.Listbox(self,selectmode=tk.MULTIPLE)
         self.outputList.grid(row=rio+2,column=cio+3,rowspan=20,columnspan=2,**options)
         scrollbar = tk.Scrollbar(self)
         scrollbar.grid(row=rio+2,column=cio+3+2,rowspan=20,sticky='NSW')
@@ -806,6 +806,10 @@ class EncodeWindow(tk.Toplevel):
         self.emptyButton = tk.Button(self,text='Rm empty folders')
         self.emptyButton.grid(row=orow+6,column=ocol, columnspan=2,**options)
         self.emptyButton.bind("<Button-1>", self.rm_empty_folders)
+
+        self.mergeButton = tk.Button(self,text='Merge Output Videos')
+        self.mergeButton.grid(row=orow+7,column=ocol, columnspan=2,**options)
+        self.mergeButton.bind("<Button-1>", self.merge_videos)
         
         self.closeButton = tk.Button(self,text='Close')
         self.closeButton.grid(row=orow+24,column=ocol, columnspan=2,**options)
@@ -814,7 +818,24 @@ class EncodeWindow(tk.Toplevel):
         
     def close(self,event):
         self.destroy()
+    
+    def merge_videos(self,event):
+        selected = self.getSelected(list=self.outputList)
+        
+        notfound = np.ones(len(selected))
+        for i in self.result.keys():    
+            for e,j in enumerate(selected): 
+                if j == self.result[i]:
+                    notfound[e] = 0
+        
+        if any(notfound): 
+            out = eace.merge_videos(selected,self.outp,remove=True)
+        else:
+            self.error.set('WARNING: Not finalized files selected, please delete merged files manually')
+            out = eace.merge_videos(selected,self.outp,remove=False)
 
+        self.outputList.insert(tk.END,out)
+        
     def rm_empty_folders(self,event):
         for root, dirs, files in os.walk(self.inp, topdown=False):
             for i in dirs:
@@ -875,12 +896,13 @@ class EncodeWindow(tk.Toplevel):
 
         
     def check_encode(self,event):
-        s = self.getSelected()
-        if s != None:
-            if s == '':
-                self.error.set('cannot check result for this entry (no result available)')
-            else:
-                self.CheckWindow = CheckWindow(s,self.result[s],result=self.result,master=self)
+        s = self.getSelected(list=self.inputList)
+        if len(s) > 0:
+            for i in s:
+                if self.result.has_key(i):
+                    self.CheckWindow = CheckWindow(i,self.result[i],result=self.result,master=self)
+                    return
+            self.error.set('cannot check result for this entry (no result available)')
         else:
             #we take the first element in the input listbox
             if len(self.result.keys()) > 0:
@@ -889,17 +911,15 @@ class EncodeWindow(tk.Toplevel):
             else:
                 self.error.set('cannot check result (no results available')
             
-    def getSelected(self):
-        s = self.inputList.curselection()
-        if len(s) == 0:
-            return None 
+    def getSelected(self,list=None):
+        if list != None:
+            s = list.curselection()
         else:
-            value = self.inputList.get(s[0])        
-            if self.result.has_key(value):
-                return value
-            else:
-                self.inputList.selection_clear(0, END)
-                return ''
+            return []
+        value = []
+        for i in s:
+            value.append(list.get(i))
+        return value
             
     def finalize_all(self,event):
         for i in self.result.keys():
@@ -977,6 +997,19 @@ class CheckWindow(tk.Toplevel):
         self.createWidgets()    
 
     def createWidgets(self):
+        #menu creation
+        menubar = tk.Menu(self)
+
+        # create a pulldown menu, and add it to the menu bar
+        toolmenu = tk.Menu(menubar, tearoff=0)
+        toolmenu.add_command(label="Cut", command=self.cutWindow)
+        toolmenu.add_separator()
+        menubar.add_cascade(label="Tools", menu=toolmenu)
+
+        # display the menu
+        self.config(menu=menubar)
+    
+    
         options = {'sticky':'NSEW','padx':3,'pady':3} 
         
         self.watchqButton = tk.Button(self,text='Watch Input')
@@ -995,6 +1028,9 @@ class CheckWindow(tk.Toplevel):
         self.finalizeButton = tk.Button(self,text='Finalize')
         self.finalizeButton.grid(row=1,column=3,columnspan=2,**options)
         self.finalizeButton.bind("<Button-1>", self.finalize)        
+    
+    def cutWindow(self):
+        CutWindow(self.input,self.output,master=self.master)
         
     def watchInput(self,event):
         t = threading.Thread(target=self.inputE.execute)
@@ -1027,7 +1063,103 @@ class CheckWindow(tk.Toplevel):
             self.destroy()
         else:
             return
+
+class CutWindow(tk.Toplevel):
+    
+    def __init__(self,input,output,master=None,*args,**kwargs):
+        tk.Toplevel.__init__(self,master=master,*args,**kwargs)
+        self.input = input
+        self.output = output
+        self.grid()
+        x = master.winfo_rootx()
+        y = master.winfo_rooty()
+        height = master.winfo_height()
+        geom = "+%d+%d" % (x,y+height)
+        self.geometry( geom )
+        self.createWidgets()    
+
+    def createWidgets(self):
+        options = {'sticky':'NSEW','padx':3,'pady':3} 
+        
+        self.hLabel = tk.Label(self,text='h')
+        self.hLabel.grid(row=0,column=0,columnspan=1,**options)
+        self.mLabel = tk.Label(self,text='m')
+        self.mLabel.grid(row=0,column=1,columnspan=1,**options)
+        self.sLabel = tk.Label(self,text='s')
+        self.sLabel.grid(row=0,column=2,columnspan=1,**options)
+        
+        self.cutList = []
+        self.cutList.append(CutElement(self))
+        self.cutList[-1].grid(row=len(self.cutList)+1,column=0,columnspan=4,rowspan=1,**options)
+        
+        
+        self.addButton = tk.Button(self,text='Add Cut')
+        self.addButton.grid(row=0,column=4,columnspan=2,**options)
+        self.addButton.bind("<Button-1>", self.addCutElement)
+
+        self.removeButton = tk.Button(self,text='Remove Cut')
+        self.removeButton.grid(row=1,column=4,columnspan=2,**options)
+        self.removeButton.bind("<Button-1>", self.removeCutElement)        
+        
+        self.cutButton = tk.Button(self,text='Cut')
+        self.cutButton.grid(row=2,column=4,columnspan=2,**options)
+        self.cutButton.bind("<Button-1>", self.cut)
+                
+    
+    def cut(self,event):
+        cuts = np.zeros(len(self.cutList)+1)
+        length = np.zeros(len(self.cutList))
+         
+        for e,i in enumerate(self.cutList):
+            cuts[e+1] = i.getSeconds()
+            length[e] = cuts[e+1] - cuts[e]
+        for e,i in enumerate(length):
+            eace.cut_video(self.output,os.path.dirname(self.output),cuts[e],i,override=True)
+        
+        eace.cut_video(self.output,os.path.dirname(self.output),cuts[-1],0,override=True)
+    
+    def addCutElement(self,event):
+        options = {'sticky':'NSEW','padx':3,'pady':3} 
+        self.cutList.append(CutElement(self))
+        self.cutList[-1].grid(row=len(self.cutList)+1,column=0,columnspan=4,rowspan=1,**options)
+    
+    def removeCutElement(self,event):
+        self.cutList.pop().destroy()
             
+class CutElement(tk.Frame):
+    
+    def __init__(self,master):
+        tk.Frame.__init__(self,master)
+        self.grid()
+        self.createWidgets()
+        
+    def createWidgets(self):
+        options = {'sticky':'NSEW','padx':3,'pady':3} 
+    
+        self.hEntry = tk.Entry(self)
+        self.hEntry.grid(row=0,column=0,columnspan=1,**options)
+        self.hEntry.insert(0,'0')
+        self.mEntry = tk.Entry(self)
+        self.mEntry.grid(row=0,column=1,columnspan=1,**options)
+        self.mEntry.insert(0,'0')
+        self.sEntry = tk.Entry(self)
+        self.sEntry.grid(row=0,column=2,columnspan=1,**options)
+        self.sEntry.insert(0,'0')
+    
+    def getSeconds(self):
+        h = self.hEntry.get()
+        m = self.mEntry.get()
+        s = self.sEntry.get()
+        
+        try:
+            sec = int(h) * 3600
+            sec = sec + int(m) * 60
+            sec = sec + float(s)
+            sec = round(sec,3)
+            return sec
+        except:
+            return None
+
 class CompareWindow(tk.Toplevel):
     
     def __init__(self,master,*args,**kwargs):
@@ -1227,7 +1359,7 @@ class CompareWindow(tk.Toplevel):
         if self.querrysource.get():
             self.outp = self.inp
         elif self.sourcedb.get():
-            self.outp = self.master.media_database.parent
+            self.outp = os.path.normpath(self.master.media_database.parent)
         else:
             self.outp = os.path.normpath(self.outputPath.get())
         

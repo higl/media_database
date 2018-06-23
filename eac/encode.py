@@ -63,6 +63,91 @@ def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',pr
                 
         return output
 
+def merge_videos(input,outpath,filename=None,override=True,remove=False,encoder='ffmpeg'):
+    inpath = os.path.dirname(input[0])
+    
+    if filename != None:
+        output = outpath+'\\'+filename
+        if os.path.isfile(output) and not override:
+            raise Exception
+    else:
+        output = os.path.split(input[0])[-1]
+        output = os.path.splitext(output)[0] + '_all' + os.path.splitext(output)[1]
+        output = outpath + "\\" + output
+        if override:
+            i = 1
+            while os.path.isfile(output):
+                output = os.path.splitext(outpath + "\\" +os.path.split(input[0])[-1])[0] + '_all_' + str(i) + os.path.splitext(output)[1]
+                i += 1    
+    
+    mergelist = inpath+'\\merge.txt'
+    
+    with open(mergelist,'w') as file:
+        for i in input:
+            file.write("file \'" + i + "\'\n")
+        
+    if override:
+        ffmpegopts =  ['-y','-f','concat','-safe', '0','-i', mergelist, '-c', 'copy']
+    else:
+        ffmpegopts =  ['-n','-f','concat','-safe', '0','-i', mergelist, '-c', 'copy']    
+    
+    ffmpegopts += [output]
+    
+    encodercall = {
+                   'ffmpeg': ['ffmpeg'] + ffmpegopts,
+                  }
+    with tempfile.TemporaryFile() as stdout:
+        try:
+            subprocess.check_call(encodercall[encoder])
+            os.remove(mergelist)
+        except subprocess.CalledProcessError as e:
+            os.remove(mergelist)
+            pass
+            
+    if remove:
+        for i in input:
+            os.remove(i)
+      
+    return output
+
+
+def cut_video(input,outpath,start,length,filename=None,override=True,encoder='ffmpeg'):
+    
+    if filename != None:
+        output = outpath+'\\'+filename
+        if os.path.isfile(output) and not override:
+            raise Exception
+    else:
+        output = os.path.split(input)[-1]
+        output = outpath + "\\" + output
+        if override:
+            i = 1
+            while os.path.isfile(output):
+                output = os.path.splitext(outpath + "\\" +os.path.split(input)[-1])[0] + '_' + str(i) + os.path.splitext(output)[1]
+                i += 1    
+            
+    if override:
+        ffmpegopts =  ['-y','-ss', '%.3f' %start ,'-i', input, '-c', 'copy']
+    else:
+        ffmpegopts =  ['-n','-ss', '%.3f' %start ,'-i', input, '-c', 'copy']    
+    
+    if length > 0:
+        ffmpegopts += ['-t','%.3f' %length]
+        
+    ffmpegopts += [output]
+    
+    encodercall = {
+                   'ffmpeg': ['ffmpeg'] + ffmpegopts,
+                  }
+    with tempfile.TemporaryFile() as stdout:
+        try:
+            subprocess.check_call(encodercall[encoder])
+        except subprocess.CalledProcessError as e:
+            pass
+      
+    return output    
+
+    
 def findFiles(path,formats=()):
     list = []
     if os.path.isdir(path):         
