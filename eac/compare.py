@@ -276,7 +276,7 @@ def compare_clips(querry,source,threshold=0.75,orb_matcher=None):
                     end_match_q[-1] = querry['tend'][i]
                     idf_s[-1] = j
                     end_match_s[-1] = source['tend'][j]
-                    score[-1] = max([score[-1],sim]) 
+                    score[-1] = max([score[-1],sim*100]) 
                 else:
                     idf_q.append(i)
                     start_match_q.append(querry['tstart'][i])
@@ -284,10 +284,10 @@ def compare_clips(querry,source,threshold=0.75,orb_matcher=None):
                     idf_s.append(j)
                     start_match_s.append(source['tstart'][j])
                     end_match_s.append(source['tend'][j])
-                    score.append(sim)
+                    score.append(sim*100)
                 break
 
-    return {'idq': idf_q, 'tsq': start_match_q,'teq': end_match_q ,'ids': idf_s, 'tss': start_match_s,'tes': end_match_s, 'score': score }
+    return np.array([idf_q, start_match_q,end_match_q ,idf_s, start_match_s,end_match_s,score],dtype = 'uint32')
 
 
 def distance(querry,source,length=7):

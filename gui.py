@@ -922,19 +922,23 @@ class EncodeWindow(tk.Toplevel):
         return value
             
     def finalize_all(self,event):
-        for i in self.result.keys():
-            if os.path.getsize(i) > os.path.getsize(self.result[i]):
-                os.remove(i)
-            else:
-                os.remove(self.result[i])
-                os.rename(i,self.result[i])
-            
-            self.result.pop(i)
+    
+        if tkMessageBox.askokcancel("Do you really want to finalize all results?"):
+            for i in self.result.keys():
+                if os.path.getsize(i) > os.path.getsize(self.result[i]):
+                    os.remove(i)
+                else:
+                    os.remove(self.result[i])
+                    os.rename(i,self.result[i])
+                
+                self.result.pop(i)
 
-        with open(self.resultfile, 'wb') as output:
-            pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
-        self.update()
-               
+            with open(self.resultfile, 'wb') as output:
+                pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+            self.update()        
+        else:
+            return
+
         
     def encode(self,event):
         if self.thread != None and self.thread.is_alive():
@@ -955,7 +959,24 @@ class EncodeWindow(tk.Toplevel):
             for i in self.infiles:
                 if self.result.has_key(i):
                     continue
+                if len(i) > 258:
+                    orig = os.path.normpath(i)
+                    # fix for long filenames
+                    prefix = u'\\\\?\\'
+                    temp,inp = os.path.split(orig)
                     
+                    temp = os.path.dirname(temp)
+                    if len(inp) > 150:
+                        inp[-50:]
+                    while len(temp) + len(inp) > 258:
+                        t = os.path.dirname(temp)
+                        if t == temp:
+                            raise ThisIsRidiculousError('these pathnames are stupid')
+                        else:
+                            temp = t                
+                    inp = temp + '\\' + inp
+                    os.rename(prefix+orig,inp)
+                    i = inp
                 out = eace.encode(i,self.outp,inpath_is_file=True,quality=quality,encoder='ffmpeg',processes=proc,audio='mp4',override=extend)
                 self.result[i] = out
                 with open(self.resultfile, 'wb') as output:
@@ -1395,6 +1416,7 @@ class CompareWindow(tk.Toplevel):
     
     def encode_thread(self):
         if self.ready:
+            import gc
             self.error.set('querry 0/%d done' %len(self.infiles))
             self.infingerprints = []
             self.outfingerprints = []
@@ -1407,9 +1429,9 @@ class CompareWindow(tk.Toplevel):
             for e,i in enumerate(self.infiles):
                 desc = self.get_video_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
                 self.infingerprints.append((i,desc))
-                self.error.set('querry %d/%d done' %(e,len(self.infiles)))
+                self.error.set('querry %d/%d done' %(e+1,len(self.infiles)))
                 if self.abort:
-                    self.error.set('source %d/%d done - aborted' %(e,len(self.infiles)))
+                    self.error.set('source %d/%d done - aborted' %(e+1,len(self.infiles)))
                     self.abort = False
                     return
             
@@ -1417,9 +1439,9 @@ class CompareWindow(tk.Toplevel):
             for e,i in enumerate(self.outfiles):
                 desc = self.get_video_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
                 self.outfingerprints.append((i,desc))
-                self.error.set('source %d/%d done' %(e,len(self.outfiles)))
+                self.error.set('source %d/%d done' %(e+1,len(self.outfiles)))
                 if self.abort:
-                    self.error.set('source %d/%d done - aborted' %(e,len(self.outfiles)))
+                    self.error.set('source %d/%d done - aborted' %(e+1,len(self.outfiles)))
                     self.abort = False
                     return
             res_file = str(hash(self.inp) + hash(self.outp))
@@ -1434,6 +1456,8 @@ class CompareWindow(tk.Toplevel):
                     self.result = pickle.load(input)
             else:
                 self.result = {}
+            
+            
             import cv2            
             matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
             
@@ -1448,6 +1472,8 @@ class CompareWindow(tk.Toplevel):
                         break
                 if not found:
                     self.result.pop(i)
+            gc.collect()
+            
             #compute the new results
             for e,i in enumerate(self.infingerprints):
                 if not self.result.has_key(i[0]):
@@ -1457,52 +1483,55 @@ class CompareWindow(tk.Toplevel):
                 else:
                     compute = np.ones(len(self.outfingerprints))
                     outlist = sorted(self.outfingerprints, key=lambda x: x[0])
-                    reslist = sorted([l['source'] for l in self.result[i[0]]])
+                    reslist = sorted([l[0] for l in self.result[i[0]]])
                     offset = 0
                     for k,l in enumerate(outlist):
-                        if k-offset >= len(reslist):
+                        if k-offset >= len(reslist)-1:
                             break
                         check = sorted([l[0],reslist[k-offset]])
                         while l[0] != reslist[k-offset] and check[0] != l[0]:
                             for en,t in enumerate(self.result[i[0]]):
-                                if t['source'] == check[0]:
+                                if t[0] == check[0]:
                                     self.result[i[0]].pop(en)
                                     break
                             offset = offset - 1
+                            if np.abs(k-offset) >= len(reslist)-1:
+                                break
                             check = sorted([l[0],reslist[k-offset]])
-                        
                         if l[0] == reslist[k-offset]:
                             compute[k] = 0
                         else:
                             offset = offset + 1
                     for l in reslist[k-offset:]:
                         for en,t in enumerate(self.result[i[0]]):
-                            if t['source'] == check[0]:
+                            if t[0] == check[0]:
                                 self.result[i[0]].pop(en)
                                 break
                 save = False
-                
                 for k,j in enumerate(outlist): 
                     if compute[k]:
                         res = eacc.compare_clips(i[1],j[1],orb_matcher=matcher)
-                        res['source'] = j[0]
-                        self.result[i[0]].append(res)
                         if crosscheck:
-                            res = eacc.compare_clips(j[1],i[1],orb_matcher=matcher)
-                            res['source'] = j[0]
-                            res['crosscheck'] = True
-                            self.result[i[0]].append(res)
+                            revres = eacc.compare_clips(j[1],i[1],orb_matcher=matcher)
+                            self.result[i[0]].append((j[0],res,revres))
+                        else:
+                            self.result[i[0]].append((j[0],res))
+                            
                         save = True
                         
-                if save:
+                if save and self.override.get():
                     with open(res_file, 'wb') as output:
                         pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
-                self.error.set('matching %d/%d done' %(e,len(self.infiles)))
+                self.error.set('matching %d/%d done' %(e+1,len(self.infiles)))
                 if self.abort:
-                    self.error.set('matching %d/%d done - aborted' %(e,len(self.infiles)))
+                    with open(res_file, 'wb') as output:
+                        pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+                    self.error.set('matching %d/%d done - aborted' %(e+1,len(self.infiles)))
                     self.abort = False
-                    return                
-
+                    return            
+                    
+            with open(res_file, 'wb') as output:    
+                pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
         else:
             self.error.set('first check the given input and output folder')
             return    
@@ -1522,8 +1551,8 @@ class CompareWindow(tk.Toplevel):
         return descriptor
         
     def update_result(self,event):
-        vmin = float(self.minScoreEntry.get())/100.0
-        vmax = float(self.maxScoreEntry.get())/100.0
+        vmin = float(self.minScoreEntry.get())
+        vmax = float(self.maxScoreEntry.get())
         self.resultframe.update_widgets(self.result,vmin=vmin,vmax=vmax,ignoreSelf=self.ignoreSelf.get())
         self.resultframe.update_idletasks()
         self.resultCanvas.config(scrollregion=self.resultCanvas.bbox("all"))
@@ -1563,6 +1592,8 @@ class CompareWindow(tk.Toplevel):
  
         path = destination + '/' + os.path.splitext(f)[0]
         path = path.rstrip()
+        if len(path+'/'+f) > 250:
+            path = destination + '/' + os.path.splitext(f)[0][0:250-len(f)-2-len(destination)]
         i = 0
         while os.path.isdir(path):
             path = destination + '/' + os.path.splitext(f)[0].rstrip() + '_' + str(i)
@@ -1605,15 +1636,16 @@ class resultFrame(tk.Frame):
         
         for i in sorted(result.keys()):
             for j in result[i]:
-                if len(j['score'])>0:
-                    if self.ignore and i==j['source']:
+                if j[1].shape[1]>0:
+                    if self.ignore and i==j[0]:
                         continue
-                    s = max(j['score']) 
+                    s = max(j[1][6,:])
+                    if len(j) > 2:
+                        revs = max(j[2][6,:])
+                        s = max([s,revs])
+                        
                     if s >= self.vmin and s <= self.vmax:
-                        if j.has_key('crosscheck'):
-                            self.resultList.append(resultElement(i,j['source'],s,master=self,result=result))
-                        else:
-                            self.resultList.append(resultElement(i,j['source'],s,master=self,result=result))
+                        self.resultList.append(resultElement(i,j[0],s,master=self,result=result))
                             
                         self.resultList[-1].grid(row=row,column=0,columnspan=5,rowspan=2)
                         row = row+2
@@ -1653,7 +1685,7 @@ class resultElement(tk.Frame):
             self.sourceLabel = tk.Label(self,text=s,width = 30)
         self.sourceLabel.grid(row=0,column=3,columnspan=2,**options)
 
-        self.scoreLabel = tk.Label(self,text=str(int(self.score * 100)),width = 5)
+        self.scoreLabel = tk.Label(self,text=str(int(self.score)),width = 5)
         self.scoreLabel.grid(row=0,column=2,columnspan=1,**options)
     
         self.watchqButton = tk.Button(self,text='Watch',width = 5)
@@ -1722,7 +1754,7 @@ def displayString(s):
     tmpstr = tmpstr.rstrip(' , ')
     return tmpstr
     
-
+            
 app = Application()
 app.title('Sample application')
 app.grid_columnconfigure(0,weight=1)

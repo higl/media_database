@@ -21,7 +21,11 @@ def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',pr
     audio_presets = {
         'mp4': ['-c:a', 'libmp3lame', '-ab', '128000', '-copyts', '-q:a', '5', '-ac', '2', '-ar', '44100', '-async', '3']
     }
-    for inp in f:
+    for infile in f:
+        if len(infile)>260:
+            raise ValueError('input file path is too long')
+        else:
+            inp = infile
         if override:
             ffmpegopts =  ['-y','-i', inp]
         else:
@@ -60,8 +64,9 @@ def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',pr
                 subprocess.check_call(encodercall[encoder])
             except subprocess.CalledProcessError as e:
                 pass
-                
-        return output
+        
+        if inpath_is_file:
+            return output
 
 def merge_videos(input,outpath,filename=None,override=True,remove=False,encoder='ffmpeg'):
     inpath = os.path.dirname(input[0])
