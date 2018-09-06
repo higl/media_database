@@ -23,7 +23,7 @@ class media_database:
     #//TODO make dlist a numpy array and then use the masking function for the reduced "unplayed" list in get_random_entry
     
     
-    def __init__(self,d,p_style = 'first',v_style = 'random',m_style = 'random',e_style = 'first'):
+    def __init__(self,d,p_style = 'first',v_style = 'random',m_style = 'random',e_style = 'first',force_update=False):
         self.parent = d
         self.hash = hash(d)
         
@@ -31,7 +31,7 @@ class media_database:
         for i in os.listdir(cwd):
             if os.path.split(i)[1] == str(self.hash)+'.pkl':
                 self._load_(i)
-                if os.path.getmtime(d) > self.mtime:
+                if os.path.getmtime(d) > self.mtime or force_update:
                     self.update(d)
                 return
         

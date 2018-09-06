@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Spyder Editor
-
-This is a temporary script file.
-"""
-
 import Tkinter as tk
 import tkMessageBox
 import media_database as mdb
@@ -15,6 +8,7 @@ import eac.compare as eacc
 import pickle
 import os
 import numpy as np
+import mdb_util
 
 class Application(tk.Tk):
     
@@ -74,8 +68,11 @@ class Application(tk.Tk):
         self.deleteButton.grid(row=toolr+1,column=toolc+0,**options)
         self.historyButton = tk.Button(self, text='History')
         self.historyButton.grid(row=toolr+2,column=toolc+0,**options)
-        self.linkButton = tk.Button(self, text='Link')
-        self.linkButton.grid(row=toolr+3,column=toolc+0,**options)
+        #self.linkButton = tk.Button(self, text='Link')
+        #self.linkButton.grid(row=toolr+3,column=toolc+0,**options)
+        self.forceUpdate = tk.IntVar()
+        self.forceBox = tk.Checkbutton(self,text='force update',variable=self.forceUpdate)
+        self.forceBox.grid(row=toolr+3,column=toolc+0,**options)
         self.singleMode = tk.IntVar()
         self.singleBox = tk.Checkbutton(self,text='single',variable=self.singleMode)
         self.singleBox.grid(row=toolr+4,column=toolc+0,**options)
@@ -104,7 +101,7 @@ class Application(tk.Tk):
     def bindActions(self):
         self.loadButton.bind("<Button-1>", self.load)
         self.saveButton.bind("<Button-1>", self.save)
-        self.linkButton.bind("<Button-1>", self.linkFile)
+        #self.linkButton.bind("<Button-1>", self.linkFile)
         self.deleteButton.bind("<Button-1>", self.deleteFile)
         self.randomButton.bind("<Button-1>", self.randomFile) 
         self.historyButton.bind("<Button-1>", self.displayHistory) 
@@ -117,13 +114,16 @@ class Application(tk.Tk):
         self.infobox.update(entry=e)
         
     def load(self,event):
+        """
+            load a databse
+        """
         self.dataBase.insert(tk.END,self.filepath.get())
         if self.media_database != None and not self.media_database.saved:
             msg = "Current database is not saved yet! \n Do you want to save before loading a new one?"
             if tkMessageBox.askyesno("Load", msg):
                 self.media_database.save()
                 
-        self.media_database = mdb.media_database(self.filepath.get())
+        self.media_database = mdb.media_database(self.filepath.get(),force_update=self.forceUpdate.get())
         self.dataBase.delete(0,tk.END)
         self.selectionList = self.media_database.get_selection()
         for i in self.selectionList:
@@ -131,6 +131,9 @@ class Application(tk.Tk):
         self.selector.update()
         
     def save(self,event):
+        """
+            save the database
+        """
         self.media_database.save()
         
     def linkFile(self,event):
@@ -144,6 +147,9 @@ class Application(tk.Tk):
             #open dialog with file not found
 
     def deleteFile(self,event):
+        """
+            delete a database entry from disk
+        """
         e = self.getSelected()
         if e != None and tkMessageBox.askokcancel("Delete", 
             "This will erase " + e.get_display_string() + " from the harddisk! Continue?"):
@@ -151,6 +157,10 @@ class Application(tk.Tk):
             self.media_database.delete_entry(e)
 
     def randomFile(self,event):
+        """
+            execute a random file from the database. If selectionList = True, 
+            only the currently selected elements from the database will be considered
+        """
         if self.selectionMode.get():
             self.last = self.media_database.get_random_entry(single=self.singleMode.get(),selection=self.selectionList)
         else:
@@ -164,38 +174,51 @@ class Application(tk.Tk):
         t.start() 
         
     def displayHistory(self,event):
-        #open dialog with listbox that contains the entries of history + bind actions similar to media_database 
-        #( == doubleclick -> dialog for open and delete
-        #     singleclick -> infobox )
-        #     rightclick -> dropdown with "add Tag or modify or something like that" 
-        # )
-        #\\TODO: the close button in historyWindow does not set historyWindow = None -> reopeneing takes 2 klicks on history ... one can check if a window was destroyed with 
-        #if 'normal' == window.state()
+        """
+            show the history of executed files
+        """
         if self.historyWindow != None:
             self.historyWindow.destroy()
             self.historyWindow = None
         else:
-            self.historyWindow = HistoryFrame(self,self.history)
+            self.historyWindow = HistoryWindow(self,self.history)
             self.after(50,self.checkHistoryWindow)
 
         
     def displayInfo(self,event):
+        """
+            display an info window
+        """
+    
         e = self.getSelected()
         if e != None:
             self.createInfoWindow(e)
     
     def statistics_window(self):
+        """
+            show statistics window
+        """
         attrib = self.media_database.get_attrib_stat()
         count = self.media_database.get_entry_count()
         StatisticsWindow(self,attrib,count)
     
     def encode_window(self):
+        """
+            show encode window
+        """
         EncodeWindow(self)
 
     def compare_window(self):
+        """
+            show compare window
+        """
         CompareWindow(self)
         
     def getSelected(self):
+        """
+            returns the currently selected database entry 
+        """
+
         s = self.dataBase.curselection()
         if len(s) == 0:
             tkMessageBox.showinfo(
@@ -209,6 +232,9 @@ class Application(tk.Tk):
             return e
             
     def createInfoWindow(self,e):
+        """
+            show info window
+        """
         if self.infoWindow != None:
             self.checkInfoStatus(cont=False)
             self.infoWindow.updateWindow(e)
@@ -217,9 +243,15 @@ class Application(tk.Tk):
             self.after(50,self.checkInfoStatus)
     
     def displaySelection(self,event):
+        """
+            event to handle filtering of database entries
+        """
         self.fillSelection()
      
     def fillSelection(self):
+        """
+            only show filtered database entries
+        """
         args = self.selector.getArgs()
         
         self.dataBase.delete(0,tk.END)
@@ -231,6 +263,9 @@ class Application(tk.Tk):
                 self.dataBase.insert(tk.END,i)
             
     def checkHistoryWindow(self):
+        """
+            check status of history window
+        """
         try:
             if self.historyWindow != None:
                 self.historyWindow.state()
@@ -240,6 +275,9 @@ class Application(tk.Tk):
     
 
     def checkInfoStatus(self,cont=True):
+        """
+            check status of info window
+        """
         try:
             self.infoWindow.state()
             s = self.infoWindow.checkStatus()
@@ -257,12 +295,20 @@ class Application(tk.Tk):
                 self.infoWindow = None
                 self.fillSelection()
                 cont = False
+            elif s == 'played':
+                self.history.append(self.infoWindow.entry)  
+                if self.historyWindow != None:
+                    self.historyWindow.fillBox()
+                self.infoWindow.resetStatus()
             if cont:
                 self.after(50,self.checkInfoStatus)
         except tk.TclError:
             self.infoWindow = None
 
     def onClose(self):
+        """
+            action befor closing the app
+        """
         if self.media_database != None and not self.media_database.saved:
             msg = "Current database is not saved. \n Do you want to save before closing?"    
             if tkMessageBox.askyesno("Exit", msg):
@@ -274,6 +320,10 @@ class Application(tk.Tk):
             self.destroy()
     
 class SelectorFrame(tk.Frame):
+    """
+        a selector frame shows different options to filter the database
+        it automatically determines these options from the database
+    """
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
         self.grid()
@@ -314,6 +364,9 @@ class SelectorFrame(tk.Frame):
             self.VarList.append(newVar)
         
     def getArgs(self):
+        """
+            returns the currently selected arguments
+        """
         args = {}
         for e,i in enumerate(self.LabelList):
             var = self.VarList[e].get()
@@ -325,6 +378,9 @@ class SelectorFrame(tk.Frame):
         return args
     
     def update(self):
+        """
+            create a new set of options for the frame
+        """
         self.clearLists()
         if self.master == None or self.master.media_database == None:
             self.attribs = ['attribute 1','attribute 2','attribute 3','attribute 4']
@@ -342,13 +398,19 @@ class SelectorFrame(tk.Frame):
         self.createSelectors()
 
     def clearLists(self):
+        """
+            destroy the old entries of the frame
+        """
         for l in self.LabelList:
             l.destroy()
         for l in self.EntryList:
             l.destroy()
         
 class InfoFrame(tk.Frame):
-  
+    """
+        InfoFrame shows the info of the currently selected 
+        database element within the main window
+    """
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
         self.LabelList = []
@@ -373,6 +435,9 @@ class InfoFrame(tk.Frame):
         
         
     def update(self,entry=None):
+        """
+            update the info with a new entry
+        """
         options = {'sticky':'NSEW','padx':3,'pady':3}         
         self.entry = entry
         if entry == None:
@@ -452,6 +517,9 @@ class InfoFrame(tk.Frame):
                             break
 
     def updateEntry(self,event):
+        """
+            update the current entry - not used
+        """
         w = event.widget
         i = self.LabelList.index(w)
         self.EntryList[i].delete(0,tk.END)
@@ -468,6 +536,9 @@ class InfoFrame(tk.Frame):
                 
         
     def displayInfo(self,event):
+        """
+            open a seperate info window with extra info
+        """
         if self.entry == None:
             e = self.master.getSelected()
         else:
@@ -477,7 +548,11 @@ class InfoFrame(tk.Frame):
             self.master.createInfoWindow(e)
             
 
-class HistoryFrame(tk.Toplevel):
+class HistoryWindow(tk.Toplevel):
+    """
+        history window is a separate window that lists
+        the executed database entries
+    """
     def __init__(self,master,history,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
         self.history = history
@@ -509,6 +584,9 @@ class HistoryFrame(tk.Toplevel):
             self.historyList.insert(0,i.get_display_string())
     
     def displayInfo(self,event):
+        """
+            open a Info Window with the selected entry
+        """
         s = self.historyList.curselection()
         if len(s) == 0:
             tkMessageBox.showinfo(
@@ -524,7 +602,9 @@ class HistoryFrame(tk.Toplevel):
         
     
 class InfoWindow(tk.Toplevel):
-    
+    """
+        a separate Info Window
+    """
     def __init__(self,master,entry,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
         self.status = 'normal'
@@ -601,6 +681,7 @@ class InfoWindow(tk.Toplevel):
         t = threading.Thread(target=self.entry.execute)
         t.setDaemon(True)
         t.start() 
+        self.status = 'played'
 
     def updateWindow(self,entry=None):
         if self.changedInfo():
@@ -648,6 +729,9 @@ class InfoWindow(tk.Toplevel):
     def checkStatus(self):
         return self.status
     
+    def resetStatus(self):
+        self.status = 'normal'
+        
     def close(self,event):
         self.destroy()
     
@@ -837,20 +921,8 @@ class EncodeWindow(tk.Toplevel):
         self.outputList.insert(tk.END,out)
         
     def rm_empty_folders(self,event):
-        for root, dirs, files in os.walk(self.inp, topdown=False):
-            for i in dirs:
-                i = os.path.join(root, i)
-                try:
-                    os.rmdir(i)
-                except:
-                    pass
-        for root, dirs, files in os.walk(self.outp, topdown=False):
-            for i in dirs:
-                i = os.path.join(root, i)
-                try:
-                    os.rmdir(i)
-                except:
-                    pass
+        mdb_util.rm_empty_folders(self.inp)
+        mdb_util.rm_empty_folders(self.outp)
             
     def check_paths(self,event):        
         self.update(load=True)
@@ -1594,9 +1666,11 @@ class CompareWindow(tk.Toplevel):
         path = path.rstrip()
         if len(path+'/'+f) > 250:
             path = destination + '/' + os.path.splitext(f)[0][0:250-len(f)-2-len(destination)]
+            path = path.rstrip()
         i = 0
+        opath = path
         while os.path.isdir(path):
-            path = destination + '/' + os.path.splitext(f)[0].rstrip() + '_' + str(i)
+            path = opath + '_' + str(i)
             i = i+1
             
         os.mkdir(path)
