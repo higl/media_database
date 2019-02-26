@@ -9,6 +9,7 @@ import pickle
 import os
 import numpy as np
 import mdb_util
+import stat
 
 class Application(tk.Tk):
     
@@ -26,7 +27,17 @@ class Application(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.onClose)
         
     def createWidgets(self):
-    
+        """
+            creates all the widgets of the main window and places them in the grid
+            
+            in the codebase the widgets are separated in 
+                menu
+                input
+                primary tools
+                database
+                secondary tools
+            which each have their own block in the grid
+        """
         #menu creation
         menubar = tk.Menu(self)
 
@@ -99,6 +110,9 @@ class Application(tk.Tk):
         self.selector.grid(row=btoolr+0,column=btoolc+12,rowspan=6,columnspan=6,**options)
 
     def bindActions(self):
+        """
+            binds the actions to the widgets that have functionality
+        """
         self.loadButton.bind("<Button-1>", self.load)
         self.saveButton.bind("<Button-1>", self.save)
         #self.linkButton.bind("<Button-1>", self.linkFile)
@@ -110,12 +124,15 @@ class Application(tk.Tk):
         self.dataBase.bind("<<ListboxSelect>>",self.updateInfoBox)
         
     def updateInfoBox(self,event):
+        """
+            updates the infobox with the currently selected media entry
+        """
         e = self.getSelected()
         self.infobox.update(entry=e)
         
     def load(self,event):
         """
-            load a databse
+            load a database
         """
         self.dataBase.insert(tk.END,self.filepath.get())
         if self.media_database != None and not self.media_database.saved:
@@ -557,6 +574,12 @@ class HistoryWindow(tk.Toplevel):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
         self.history = history
         self.grid()
+        x = master.winfo_rootx()
+        y = master.winfo_rooty()
+        height = master.winfo_height()
+        width = master.winfo_width()
+        geom = "+%d+%d" % (x,y+height*1.01)
+        self.geometry( geom )
         self.createWidgets()
         self.fillBox()
         
@@ -610,6 +633,12 @@ class InfoWindow(tk.Toplevel):
         self.status = 'normal'
         self.entry = entry
         self.grid()
+        x = master.winfo_rootx()
+        y = master.winfo_rooty()
+        height = master.winfo_height()
+        width = master.winfo_width()
+        geom = "+%d+%d" % (x+width*1.01,y+height*1.01)
+        self.geometry( geom )
         self.createWidgets()
         self.fillInfo()
         
@@ -744,7 +773,13 @@ class StatisticsWindow(tk.Toplevel):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
         self.attrib = attrib
         self.count = count
-        self.grid()
+        self.grid()        
+        x = master.winfo_rootx()
+        y = master.winfo_rooty()
+        height = master.winfo_height()
+        width = master.winfo_width()
+        geom = "+%d+%d" % (x+width*1.01,y)
+        self.geometry( geom )
         self.createWidgets()
         self.fillInfo()
         
@@ -797,7 +832,13 @@ class EncodeWindow(tk.Toplevel):
         self.ready = False
         self.thread = None
         self.result = {}
-        self.grid()
+        self.grid()        
+        x = master.winfo_rootx()
+        y = master.winfo_rooty()
+        height = master.winfo_height()
+        width = master.winfo_width()
+        geom = "+%d+%d" % (x+width*1.01,y)
+        self.geometry( geom )
         self.createWidgets()
         self.abort = False
         self.protocol("WM_DELETE_WINDOW", self.onClose)
@@ -998,11 +1039,19 @@ class EncodeWindow(tk.Toplevel):
         if tkMessageBox.askokcancel("Do you really want to finalize all results?"):
             for i in self.result.keys():
                 if os.path.getsize(i) > os.path.getsize(self.result[i]):
-                    os.remove(i)
+                    try:
+                        os.remove(i)
+                    except:
+                        os.chmod(i, stat.S_IRWXU| stat.S_IRWXG| stat.S_IRWXO)
+                        os.remove(i)
                 else:
                     os.remove(self.result[i])
-                    os.rename(i,self.result[i])
-                
+                    try:
+                        os.rename(i,self.result[i])
+                    except:
+                        os.chmod(i, stat.S_IRWXU| stat.S_IRWXG| stat.S_IRWXO)
+                        os.rename(i,self.result[i])
+                    
                 self.result.pop(i)
 
             with open(self.resultfile, 'wb') as output:
@@ -1147,11 +1196,19 @@ class CheckWindow(tk.Toplevel):
     def finalize(self,event):
         if tkMessageBox.askokcancel("Finalize","Do you want to finalize "+ self.input+ " ?"):
             if os.path.getsize(self.input) > os.path.getsize(self.output):
-                os.remove(self.input)
+                try:
+                    os.remove(self.input)
+                except:
+                    os.chmod(self.input, stat.S_IRWXU| stat.S_IRWXG| stat.S_IRWXO)
+                    os.remove(self.input)              
             else:
                 os.remove(self.output)
-                os.rename(self.input,self.output)
-            
+                try:
+                    os.rename(self.input,self.output)
+                except:
+                    os.chmod(self.input, stat.S_IRWXU| stat.S_IRWXG| stat.S_IRWXO)
+                    os.rename(self.input,self.output)
+                
             self.master.update(remove = self.input)
             self.destroy()
         else:
@@ -1261,6 +1318,12 @@ class CompareWindow(tk.Toplevel):
         self.thread = None
         self.abort = False
         self.grid()
+        x = master.winfo_rootx()
+        y = master.winfo_rooty()
+        height = master.winfo_height()
+        width = master.winfo_width()
+        geom = "+%d+%d" % (x+width*1.01,y)
+        self.geometry( geom )
         self.createWidgets()
         self.protocol("WM_DELETE_WINDOW", self.onClose)
         
