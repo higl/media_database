@@ -131,13 +131,15 @@ class media_entry:
             return random.choice(self.filepath)
             
 
-    def match_selection(self,type='',style='',case_sensitive=False,**kwargs):
+    def match_selection(self,type='',style='',name='',case_sensitive=False,**kwargs):
         """
         \\TODO check if this works
         """
         if not type == '' and not self.type == type:
             return False
         elif not style == '' and not self.style == style: 
+            return False
+        elif not name == '' and not name in self.path: 
             return False
         
         keys = kwargs.keys()

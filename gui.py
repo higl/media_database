@@ -281,7 +281,8 @@ class Application(tk.Tk):
             
     def checkHistoryWindow(self):
         """
-            check status of history window
+            check status of history window. 
+            If it does not exist anymore, remove it from the main window
         """
         try:
             if self.historyWindow != None:
@@ -294,6 +295,10 @@ class Application(tk.Tk):
     def checkInfoStatus(self,cont=True):
         """
             check status of info window
+            - If the window does not exist anymore, remove it from the main window
+            - if a media entry has been updated or deleted, 
+            update the list and mark the database as changed
+            - if the media entry has been played, add it to the history
         """
         try:
             self.infoWindow.state()
@@ -324,7 +329,8 @@ class Application(tk.Tk):
 
     def onClose(self):
         """
-            action befor closing the app
+            clean up before closing the app. 
+            Warn if the database has been changed and not yet saved.
         """
         if self.media_database != None and not self.media_database.saved:
             msg = "Current database is not saved. \n Do you want to save before closing?"    
@@ -382,7 +388,8 @@ class SelectorFrame(tk.Frame):
         
     def getArgs(self):
         """
-            returns the currently selected arguments
+            returns the currently selected arguments 
+            and the respective entries in the text fields
         """
         args = {}
         for e,i in enumerate(self.LabelList):
@@ -396,7 +403,8 @@ class SelectorFrame(tk.Frame):
     
     def update(self):
         """
-            create a new set of options for the frame
+            gets the list of possible selector arguments from the current media database 
+            and updates the display within in the frame
         """
         self.clearLists()
         if self.master == None or self.master.media_database == None:
@@ -453,7 +461,11 @@ class InfoFrame(tk.Frame):
         
     def update(self,entry=None):
         """
-            update the info with a new entry
+            update the info with a new entry 
+            or removes the old one if no entry is submitted
+            
+            entry infos are displayed according to their attributes,
+            whereas the elements are placed automatically
         """
         options = {'sticky':'NSEW','padx':3,'pady':3}         
         self.entry = entry
@@ -554,7 +566,7 @@ class InfoFrame(tk.Frame):
         
     def displayInfo(self,event):
         """
-            open a seperate info window with extra info
+            open a separate info window with extra info
         """
         if self.entry == None:
             e = self.master.getSelected()
@@ -602,6 +614,9 @@ class HistoryWindow(tk.Toplevel):
         self.destroy()
         
     def fillBox(self):
+        """
+            displays the history list in the list box
+        """
         self.historyList.delete(0,tk.END)
         for i in self.history:
             self.historyList.insert(0,i.get_display_string())
@@ -654,6 +669,8 @@ class InfoWindow(tk.Toplevel):
         
     def fillInfo(self):
         """
+            creates and fills widgets that display the attributes of the media entry
+            
             \\TODO make the layout depending on the number of attributes 
                     if there are more than 10 attributes, I would like to have 10 dropdownboxes with all the attributes available ... I guess there will be never more than 10 different attributes updated and if so we should use a different method 
         """
@@ -702,17 +719,28 @@ class InfoWindow(tk.Toplevel):
             
         
     def clearWindow(self):
+        """
+            removes all the widgets needed to 
+            display the current media entry
+        """
         list = self.grid_slaves()
         for l in list:
             l.destroy()
             
     def playFile(self,event):
+        """
+            execute the media entry in a separate thread
+        """
         t = threading.Thread(target=self.entry.execute)
         t.setDaemon(True)
         t.start() 
         self.status = 'played'
 
     def updateWindow(self,entry=None):
+        """
+            exchange the current media entry with a new one
+            checks if the current one has been modified first and warns accordingly
+        """
         if self.changedInfo():
             if tkMessageBox.askokcancel("Update Info","Entries have been updated. Do you want to save first?"):
                 self.updateEntry()
@@ -725,7 +753,9 @@ class InfoWindow(tk.Toplevel):
         
     def updateEntry(self):
         """
+            update the attribute entries in the current media entry
         """
+        
         attrib = {}
         for e,i in enumerate(self.LabelList):
             uString = self.EntryList[e].get()
@@ -737,6 +767,9 @@ class InfoWindow(tk.Toplevel):
         
     
     def delete(self,event):
+        """
+            delete the current media entry FROM DISK!
+        """
         if tkMessageBox.askokcancel("Delete", 
             "This will erase " + self.entry.get_display_string() + " from the harddisk! Continue?"):
             self.entry.delete()
@@ -745,6 +778,10 @@ class InfoWindow(tk.Toplevel):
             return
     
     def changedInfo(self):
+        """
+            checks if the attribute entries have been
+            changed from the stored values
+        """
         attrib = {}
         for e,i in enumerate(self.LabelList):
             uString = self.EntryList[e].get()
@@ -768,6 +805,10 @@ class InfoWindow(tk.Toplevel):
         print 'zelda is not link'
 
 class StatisticsWindow(tk.Toplevel):
+    """
+        A window that displays a selection of Statistics about 
+        the attributes of the current media database
+    """
     
     def __init__(self,master,attrib,count,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
@@ -812,10 +853,16 @@ class StatisticsWindow(tk.Toplevel):
         self.destroy()
         
     def fillInfo(self):
+        """
+            Fills the list of attributes in the selection box
+        """
         for i in self.attrib.keys():
             self.attribList.insert(tk.END,i)
 
     def displayStat(self,event):   
+        """
+            Displays the statistics about the currently selected attribute
+        """
         s = self.attribList.curselection()
         s = self.attrib.keys()[s[0]]
         sort = sorted(self.attrib[s].items(), key=lambda x: x[1], reverse=True)
@@ -826,7 +873,10 @@ class StatisticsWindow(tk.Toplevel):
 
 
 class EncodeWindow(tk.Toplevel):
-    
+    """
+        A window that allow to encode video files in a folder and store them in a different folder.
+        
+    """
     def __init__(self,master,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
         self.ready = False
@@ -945,6 +995,10 @@ class EncodeWindow(tk.Toplevel):
         self.destroy()
     
     def merge_videos(self,event):
+        """
+            merge the selected video files from the output 
+            list into a single file
+        """
         selected = self.getSelected(list=self.outputList)
         
         notfound = np.ones(len(selected))
@@ -962,13 +1016,23 @@ class EncodeWindow(tk.Toplevel):
         self.outputList.insert(tk.END,out)
         
     def rm_empty_folders(self,event):
+        """
+            removes alls empty folders in the input and output directories
+        """
         mdb_util.rm_empty_folders(self.inp)
         mdb_util.rm_empty_folders(self.outp)
             
-    def check_paths(self,event):        
+    def check_paths(self,event):    
         self.update(load=True)
         
     def update(self,load=False,remove=None):
+        """
+            finds all video files in the input and output directories 
+            and displays them in the respective list boxes
+            
+            also loads a result file that matches original to encoded 
+            video files from previous runs on the same directories
+        """
         self.inp = os.path.normpath(self.inputPath.get())
         self.outp = os.path.normpath(self.outputPath.get())
         
@@ -1009,6 +1073,11 @@ class EncodeWindow(tk.Toplevel):
 
         
     def check_encode(self,event):
+        """
+            open a new window that allows you to check the outcome of the encoding
+            
+            it either uses the selected video or the next video file in the result dictionary
+        """
         s = self.getSelected(list=self.inputList)
         if len(s) > 0:
             for i in s:
@@ -1025,6 +1094,9 @@ class EncodeWindow(tk.Toplevel):
                 self.error.set('cannot check result (no results available')
             
     def getSelected(self,list=None):
+        """
+            return all selected elements of a listbox
+        """
         if list != None:
             s = list.curselection()
         else:
@@ -1035,7 +1107,13 @@ class EncodeWindow(tk.Toplevel):
         return value
             
     def finalize_all(self,event):
-    
+        """
+            finalizes all encoded videos in the result dictionary.
+            this means:
+                we compare the file sizes of original and encoded video. 
+                We will select the smaller one and move it to the output folder.
+                The remaining file will be deleted from disk.
+        """
         if tkMessageBox.askokcancel("Do you really want to finalize all results?"):
             for i in self.result.keys():
                 if os.path.getsize(i) > os.path.getsize(self.result[i]):
@@ -1062,6 +1140,9 @@ class EncodeWindow(tk.Toplevel):
 
         
     def encode(self,event):
+        """
+            the event handler that creates a thread to start encoding
+        """
         if self.thread != None and self.thread.is_alive():
             return
         else:
@@ -1075,6 +1156,14 @@ class EncodeWindow(tk.Toplevel):
             self.thread.start()
     
     def encode_thread(self,quality='low',proc='4',extend=True):
+        """
+            picks all files from the input folder, 
+            encodes it and stores the necessary information
+            to check the result later on (also to know which
+            output video is based on which input video).
+            
+            the function also takes care of too long filenames (needed for windows) 
+        """
         if self.ready:
             self.error.set('')
             for i in self.infiles:
@@ -1111,10 +1200,18 @@ class EncodeWindow(tk.Toplevel):
             return
 
     def abort_thread(self,event):
+        """
+            checks if an encoding thread is running and if so, sends a signal
+            to it that forces it to abort after the next encode finishes
+        """
         if self.thread != None and self.thread.is_alive():
             self.abort = True
             
     def onClose(self):
+        """
+            make sure that we do not close this window with a running encode thread. 
+            wait for it to abort first
+        """
         if self.thread != None and self.thread.is_alive():
             self.abort = True
             self.thread.join()
@@ -1123,7 +1220,10 @@ class EncodeWindow(tk.Toplevel):
             self.destroy()
             
 class CheckWindow(tk.Toplevel):
-    
+    """
+        a window that allows to compare two video files 
+        and take further actions (keep one or the other, manipulate result)
+    """
     def __init__(self,input,output,master=None,result=None,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
         self.input = input
@@ -1172,19 +1272,31 @@ class CheckWindow(tk.Toplevel):
         self.finalizeButton.bind("<Button-1>", self.finalize)        
     
     def cutWindow(self):
+        """
+            opens a window to cut the output video into smaller pieces
+        """
         CutWindow(self.input,self.output,master=self.master)
         
     def watchInput(self,event):
+        """
+            watch the input video (opens a separate thread)
+        """
         t = threading.Thread(target=self.inputE.execute)
         t.setDaemon(True)
         t.start() 
 
     def watchOutput(self,event):
+        """
+            watch the output video (opens a separate thread)
+        """
         t = threading.Thread(target=self.outputE.execute)
         t.setDaemon(True)
         t.start() 
     
     def reject(self,event):
+        """
+            we reject the produced output -> delete the output and remove the entry from the result dictionary
+        """
         if tkMessageBox.askokcancel("Delete", 
             "This will erase " + self.outputE.get_display_string() + " from the harddisk! Continue?"):
             os.remove(self.output)
@@ -1194,6 +1306,12 @@ class CheckWindow(tk.Toplevel):
             return
 
     def finalize(self,event):
+        """
+            we finalize produced output:
+                we compare the file sizes of original and encoded video. 
+                We will select the smaller one and move it to the output folder.
+                The remaining file will be deleted from disk.
+        """
         if tkMessageBox.askokcancel("Finalize","Do you want to finalize "+ self.input+ " ?"):
             if os.path.getsize(self.input) > os.path.getsize(self.output):
                 try:
@@ -1215,7 +1333,9 @@ class CheckWindow(tk.Toplevel):
             return
 
 class CutWindow(tk.Toplevel):
-    
+    """
+        window that allows to cut a video into smaller pieces
+    """
     def __init__(self,input,output,master=None,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
         self.input = input
@@ -1257,6 +1377,9 @@ class CutWindow(tk.Toplevel):
                 
     
     def cut(self,event):
+        """
+            does the cutting
+        """
         cuts = np.zeros(len(self.cutList)+1)
         length = np.zeros(len(self.cutList))
          
@@ -1269,15 +1392,23 @@ class CutWindow(tk.Toplevel):
         eace.cut_video(self.output,os.path.dirname(self.output),cuts[-1],0,override=True)
     
     def addCutElement(self,event):
+        """
+            adds another empty cut point to the window. This allows to cut the video in one more place
+        """
         options = {'sticky':'NSEW','padx':3,'pady':3} 
         self.cutList.append(CutElement(self))
         self.cutList[-1].grid(row=len(self.cutList)+1,column=0,columnspan=4,rowspan=1,**options)
     
     def removeCutElement(self,event):
+        """
+            removes a cut point from the window. 
+        """
         self.cutList.pop().destroy()
             
 class CutElement(tk.Frame):
-    
+    """
+        a cut element allows to enter the timestamp of a cut point for the cutwindow
+    """
     def __init__(self,master):
         tk.Frame.__init__(self,master)
         self.grid()
@@ -1297,6 +1428,9 @@ class CutElement(tk.Frame):
         self.sEntry.insert(0,'0')
     
     def getSeconds(self):
+        """
+            returns the timestamp of the cut in seconds 
+        """
         h = self.hEntry.get()
         m = self.mEntry.get()
         s = self.sEntry.get()
@@ -1311,7 +1445,11 @@ class CutElement(tk.Frame):
             return None
 
 class CompareWindow(tk.Toplevel):
-    
+    """
+        The CompareWindow allows to find duplicate videos, 
+        by creating a fingerprint file of each video file
+        and then comparing these, using the eac module
+    """
     def __init__(self,master,*args,**kwargs):
         tk.Toplevel.__init__(self,master=master,*args,**kwargs)
         self.ready = False
@@ -1501,6 +1639,10 @@ class CompareWindow(tk.Toplevel):
         self.closeButton.bind("<Button-1>", self.close)
         
     def enable_disable(self):
+        """
+            enables or disables the output entry field, 
+            based on the options set
+        """
         if self.sourcedb.get() or self.querrysource.get():
             self.outputPath.config(state='disabled')
         else:
@@ -1510,7 +1652,10 @@ class CompareWindow(tk.Toplevel):
         self.destroy()
 
     def check(self,event):
-        
+        """
+            checks the input and output folders for all video files 
+            and displays them in the respective listboxes
+        """
         self.inp = os.path.normpath(self.inputPath.get())
         if self.querrysource.get():
             self.outp = self.inp
@@ -1542,6 +1687,9 @@ class CompareWindow(tk.Toplevel):
         self.error.set('')
         
     def encode(self,event):
+        """
+            event to start a thread that compares video files
+        """
         if self.thread != None and self.thread.is_alive():
             return
         else:
@@ -1550,6 +1698,12 @@ class CompareWindow(tk.Toplevel):
             self.thread.start()
     
     def encode_thread(self):
+        """
+            compare video files
+            
+            TODO: move parts of this complicated function into 
+            separate functions to reduce duplicate code and make it more readable
+        """
         if self.ready:
             import gc
             self.error.set('querry 0/%d done' %len(self.infiles))
@@ -1673,6 +1827,10 @@ class CompareWindow(tk.Toplevel):
     
     
     def get_video_descriptor(self,file,fps=3,nsec=180,proc=1,quality='320x640',override=False):
+        """
+            find all the fingerprint (descriptor) files of the involved videos. 
+            If no fingerprint file exists, it will be created
+        """
         descriptor_file = file+'.dscr'
         
         if os.path.isfile(descriptor_file) and not override:
@@ -1686,6 +1844,10 @@ class CompareWindow(tk.Toplevel):
         return descriptor
         
     def update_result(self,event):
+        """
+            display the results.
+            Only shows results with a probability score between vmin and vmax
+        """
         vmin = float(self.minScoreEntry.get())
         vmax = float(self.maxScoreEntry.get())
         self.resultframe.update_widgets(self.result,vmin=vmin,vmax=vmax,ignoreSelf=self.ignoreSelf.get())
@@ -1693,10 +1855,21 @@ class CompareWindow(tk.Toplevel):
         self.resultCanvas.config(scrollregion=self.resultCanvas.bbox("all"))
     
     def abort_thread(self,event):
+        """
+            checks if the compare thread is running 
+            and if so sends a signal to abort after the next result has been produced
+        """
         if self.thread != None and self.thread.is_alive():
             self.abort = True
             
     def add_result(self,event):
+        """
+            when we compare with the current media database
+            of the main window, then we can also create media entries from  the result files
+            (hopefully clean of duplicates after we checked them) and add them to the media database
+            
+            this also includes moving the physical file on disk to the media database folder
+        """
         if not self.sourcedb.get():
             self.error.set('results can only be added to the database, if they are compared to a database from the main window')
             return
@@ -1721,6 +1894,10 @@ class CompareWindow(tk.Toplevel):
             return
     
     def move_to_db(self,fi,db):
+        """
+            does the physical data transfer from the output folder to the media database folder
+            has to take care of too long filenames
+        """
         destination = db.parent
         f = os.path.split(fi)[-1]
         desc = fi+'.dscr'
@@ -1744,6 +1921,10 @@ class CompareWindow(tk.Toplevel):
         db.add_entry(e)
         
     def onClose(self):
+        """
+            we don't want to close this window with a running compare thread. 
+            If it is, send an abort signal and wait for it to die.
+        """
         if self.thread != None and self.thread.is_alive():
             self.abort = True
             self.thread.join()
@@ -1752,7 +1933,10 @@ class CompareWindow(tk.Toplevel):
             self.destroy()
                 
 class resultFrame(tk.Frame):    
-    
+    """
+        the structure that allows to display the results 
+        of the compare window in a flexible way
+    """
     def __init__(self,master=None):
         tk.Frame.__init__(self,master)
         self.resultList = []
@@ -1762,6 +1946,9 @@ class resultFrame(tk.Frame):
         self.ignore = False
         
     def update_widgets(self,result,vmin=0,vmax=0,ignoreSelf=None):
+        """
+            select the results that have a probability score between vmin and vmax and display them 
+        """
         self.clearLists()
         if vmin > 0:
             self.vmin = vmin
@@ -1793,7 +1980,11 @@ class resultFrame(tk.Frame):
         self.resultList = []
         
 class resultElement(tk.Frame):
-    
+    """
+        the display element of a single result entry in the compare window
+        includes buttons to watch source and query file, 
+        and to delete the query file in case it is found to be a dublicate
+    """
     def __init__(self,querry,source,score,master=None,result=None):
         tk.Frame.__init__(self,master)
         self.querry = querry
@@ -1839,16 +2030,25 @@ class resultElement(tk.Frame):
         self.deleteButton.bind("<Button-1>", self.deleteQuerry)
 
     def watchQuerry(self,event):
+        """
+            watch the query video
+        """
         t = threading.Thread(target=self.querryE.execute)
         t.setDaemon(True)
         t.start() 
 
     def watchSource(self,event):
+        """
+            watch the source video
+        """
         t = threading.Thread(target=self.sourceE.execute)
         t.setDaemon(True)
         t.start() 
     
     def deleteQuerry(self,event):
+        """
+            delete the query video from disk
+        """
         if tkMessageBox.askokcancel("Delete", 
             "This will erase " + self.querryE.get_display_string() + " from the harddisk! Continue?"):
             self.querryE.delete()
@@ -1860,8 +2060,11 @@ class resultElement(tk.Frame):
         
         
 class AutoScrollbar(tk.Scrollbar):
-    # A scrollbar that hides itself if it's not needed.
-    # Only works if you use the grid geometry manager!
+    """
+     Taken from StockOverFlow:
+     A scrollbar that hides itself if it's not needed.
+     Only works if you use the grid geometry manager!
+    """
     def set(self, lo, hi):
         if float(lo) <= 0.0 and float(hi) >= 1.0:
             # grid_remove is currently missing from Tkinter!
@@ -1876,6 +2079,10 @@ class AutoScrollbar(tk.Scrollbar):
 
 
 def updateString(s):
+    """
+        takes a string and splits it up into single attributes (separeted by comma),
+        that can be added to a media entry 
+    """
     tmpstr = s.split(',')
     tmpstr = list(map(lambda x: x.lstrip(),tmpstr))
     tmpstr = list(map(lambda x: x.rstrip(),tmpstr)) 
@@ -1883,6 +2090,10 @@ def updateString(s):
     return tmpstr
 
 def displayString(s):
+    """
+        takes a list of strings (typically all the attributes of a media entry) 
+        and combines them into a nice string to display them
+    """
     tmpstr = ''
     for i in s:
         tmpstr = tmpstr + ' , ' + i
