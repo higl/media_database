@@ -8,13 +8,10 @@ import os
 
 # Video transformation
 def get_video_descriptor(video,nfps=3,quality='320x640',nkey=180,processes=1):
+    """
+        compute the fingerprint file of a video file. 
+    """
     import encode
-    # using ffmpeg and storing the file in a temp folder 
-    # use the (modified) code from the Desktop pc with video conversion!
-    #tempdir = tempfile.mkdtemp()
-    #test the performance with QCIF (= 72x144) and 320x640
-    
-    #change fps to nfps (ffmpeg option is -r nfps)
     
     N_opts = {'320x640':320,'qcif':72}
     try:
@@ -42,8 +39,13 @@ def get_video_descriptor(video,nfps=3,quality='320x640',nkey=180,processes=1):
     
 
 def get_keyframes(video,nkey,N=320,M=640,nfps=10):
-    #keyframes are averaged frames over a specific length 
-    #we also need keyframes in grey color
+    """
+        compute the keyframes of a video files
+        
+        keyframes are averaged frames over a specific length 
+        we then extend the keyframe with a flipped version of itself, to prevent rotation attacks
+        we also need keyframes in grey color for a better contrast
+    """
     v = cv2.VideoCapture(video)
     
     keyframes = []
@@ -101,6 +103,15 @@ def get_keyframes(video,nkey,N=320,M=640,nfps=10):
     
 # Create fingerprints
 def get_fingerprints(kframes,gkframes,tstart,tend,thrs=0.5,nfeatures=400,nlevels=15):
+    """
+        get all the fingerprints of a keyframe.
+        
+        we have three different fingerprints:
+            1. a thumbnail image for a quick pixel by pixel comparison
+            2. a color histogram of all the pixels
+            3. keypoints associated with edges on the image, 
+               computed from intensity gradients (grey keyframe) 
+    """
     fprin = {'thumb': [],'cc': [],'orb': [],'tstart': [],'tend': []}
     orbfunc = cv2.ORB_create(nfeatures=nfeatures,nlevels=nlevels)
     
@@ -153,6 +164,9 @@ def get_fingerprints(kframes,gkframes,tstart,tend,thrs=0.5,nfeatures=400,nlevels
 
 ### 1. Fingerprint
 def thumbnail(frame,interp=cv2.INTER_AREA):
+    """
+        create a thumbnail with 30x30 pixel
+    """
     return cv2.resize(frame,(30,30),interpolation=interp)
 
 ### 2. Fingerprint 
@@ -215,6 +229,9 @@ def color_correlation(frame,b=8):
 
 # 3rd Fingerprint
 def orb_detection(frame,orb=None):
+    """
+        detects keypoints of an image according to the ORB function
+    """
     if orb == None:
         orb = cv2.ORB_create()
 
@@ -229,6 +246,9 @@ def orb_detection(frame,orb=None):
 
 
 def compare_frame(querry,source,wth=0.25,wcc=0.25,worb=0.5,qth=0.5,qcc=0.75,qorb=0.7,orb_matcher=None):
+    """
+        compare the fingerprints of two keyframes and return a probability score of how similar they are
+    """
     cor = correlation(querry[0],source[0])
     if cor >= qth:
         dist_cc = 1-distance_precomp(querry[1],source[1])
@@ -248,6 +268,10 @@ def compare_frame(querry,source,wth=0.25,wcc=0.25,worb=0.5,qth=0.5,qcc=0.75,qorb
 
 
 def compare_clips(querry,source,threshold=0.75,orb_matcher=None):
+    """
+        compare two clips based on their keyframes. 
+        Returns the maximum probability score of all the keyframe pares 
+    """
     start_match_q = []
     end_match_q = []
     idf_q = []
@@ -336,6 +360,11 @@ def distance_precomp(querry,source,length=7):
 
 
 def match_orb(querry,source,thorb=40,matcher=None):
+    """
+        compare the keypoints given and return a matching score 
+        depending on which fraction of keypoints could be matched
+        \\TODO is there a better method to do this, in case of very few keypoints?
+    """
     if matcher == None:
         bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
     else:
@@ -361,6 +390,10 @@ def match_orb(querry,source,thorb=40,matcher=None):
                 
 
 def correlation(querry,source):
+    """
+        returns the correlation distance of two arrays 
+        this is used to compare the thumbnail fingerprints
+    """
     q = querry.flatten()
     s = source.flatten()
     return -(scipy.spatial.distance.correlation(q,s)-1.0)
@@ -380,5 +413,8 @@ def blockshaped(arr, nrows, ncols):
                .reshape(-1, nrows, ncols))
                
 def rreplace(s,old,new,number):
+    """
+        replace the first 'number' appearances (from the right) of string 'old' with 'new'
+    """
     li = s.rsplit(old, number)
     return new.join(li)

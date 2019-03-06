@@ -2,11 +2,27 @@ import os
 import subprocess
 import tempfile
 
-vformats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg')
+vformats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg','.MP4')
 
 def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',processes=1,audio='mp4',override=False,options=None):
+    """
+        encodes videos with some predefined quality preset
+        
+        parameters:
+            inpath: filepath or folder of the input 
+            outpath: folder of the output
+        
+        keywords:
+            inpath_is_file: is the input a single video file?
+            quality: video quality preset, defaults to 'low'
+            audio: audio quality preset, defaults to 'mp4'
+            encoder: which encoder do we want to use, defaults to 'ffmpeg' ( = only one supported at the moment)
+            processes: how many processes do we want to run
+            override: if true we will override the output file if it already exists
+            options: additional options to the encoder
     #\\TODO acceptedformats
     #\\TODO only do those files that are not already done
+    """
     if not inpath_is_file:
         f = findFiles(inpath,formats=vformats)
     else:
@@ -69,6 +85,20 @@ def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',pr
             return output
 
 def merge_videos(input,outpath,filename=None,override=True,remove=False,encoder='ffmpeg'):
+    """
+        merges video files into a single file
+        does NOT reencode but just puts them together !
+        
+        parameters:
+            input: a list of input filepaths
+            outpath: the output folder
+        keywords:    
+            filename: the name of the merged video, if not set the filename will be
+                      determined from the first entry in input
+            override: if true we will override the output file if it already exists
+            remove: if true we will delete the input files after the merge
+            encoder: which encoder do we want to use, defaults to 'ffmpeg' ( = only one supported at the moment)
+    """
     inpath = os.path.dirname(input[0])
     
     if filename != None:
@@ -117,7 +147,21 @@ def merge_videos(input,outpath,filename=None,override=True,remove=False,encoder=
 
 
 def cut_video(input,outpath,start,length,filename=None,override=True,encoder='ffmpeg'):
-    
+    """
+        cut a part out of a video file 
+        does NOT reencode but just picks it out!
+        
+        parameters:
+            input: the input file
+            outpath: the output folder
+            start: the start point of the cut in seconds
+            lenght: the length of the cut in seconds 
+        keywords:    
+            filename: the name of the merged video, if not set the filename will be
+                      determined from the input
+            override: if true we will override the output file if it already exists
+            encoder: which encoder do we want to use, defaults to 'ffmpeg' ( = only one supported at the moment)
+    """    
     if filename != None:
         output = outpath+'\\'+filename
         if os.path.isfile(output) and not override:
@@ -154,6 +198,9 @@ def cut_video(input,outpath,start,length,filename=None,override=True,encoder='ff
 
     
 def findFiles(path,formats=()):
+    """
+        find all video files in path that have the specified formats
+    """
     list = []
     if os.path.isdir(path):         
         for root, dirs, files in os.walk(path, topdown=False):
@@ -165,5 +212,8 @@ def findFiles(path,formats=()):
     return list
     
 def rreplace(s,old,new,number):
+    """
+        replace the first 'number' appearances (from the right) of string 'old' with 'new'
+    """
     li = s.rsplit(old, number)
     return new.join(li)
