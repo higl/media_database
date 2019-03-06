@@ -14,8 +14,9 @@ else:
         return ' '.join(quote(arg) for arg in seq)
         
 class media_entry:
-    
     """ 
+        A media entry stores information about a media file or
+        a folder containing a certain type of media
         //TODO move attributes to a dictionary ?
     """
     def __init__(self,path, type='unknown',style='random',format=()):
@@ -39,6 +40,10 @@ class media_entry:
     
     def _determine_files_(self,path,style,format):
         """
+            get all the media files inside of path that
+            fit the style of the media entry. 
+            Selection is done over a predefined set of
+            file endings associated with each media type 
         \\TODO redo this with the os.walk() function
         """
         fileList = []        
@@ -122,7 +127,11 @@ class media_entry:
         return self.hash
 
     def get_filepath(self):
-        #//TODO redo this function in the same manner as determine_media_type with the recurive order search. For styles fist, last, etc. self.filepath has to be set and in the next this will be returned  or even save arrays for random access in media_entry
+        """
+            return a filepath (to be executed?) of the media files in the media entry.
+            if several files are present, selection will depend on the style settings. 
+        //TODO redo this function in the same manner as determine_media_type with the recurive order search. For styles fist, last, etc. self.filepath has to be set and in the next this will be returned  or even save arrays for random access in media_entry
+        """
         if self.style == 'first':
             return self.filepath[0]
         elif self.style == 'last':
@@ -133,6 +142,8 @@ class media_entry:
 
     def match_selection(self,type='',style='',name='',case_sensitive=False,**kwargs):
         """
+            checks if the media entry matches a filter, 
+            based on type, style, name and attributes 
         \\TODO check if this works
         """
         if not type == '' and not self.type == type:
@@ -166,7 +177,10 @@ class media_entry:
 
         
     def execute(self,filepath='unknown',singleMode=False):   
-        #TODO replace os.system by something safer like subprocess
+        """
+            play a media file
+        //TODO replace os.system by something safer like subprocess
+        """
         
         if filepath == 'unknown':
             filepath = self.get_filepath()  
@@ -191,10 +205,16 @@ class media_entry:
             self.set_played(True)
 
     def set_played(self,played):
+        """
+            mark if a media entry has been played before
+        """
         self.played = played
             
     
     def delete(self):
+        """
+            delete a media entry from disk
+        """
         if os.path.isdir(self.path):
             for root, dirs, files in os.walk(self.path, topdown=False):
                 for name in files:
@@ -207,6 +227,9 @@ class media_entry:
             os.remove(self.path)
                 
 class video_entry(media_entry):
+    """
+        a media entry containing video files
+    """
     accepted_video_formats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg')
         
     def __init__(self,path, tags=[], actors=[], genre='unknown',style='first'):
@@ -217,6 +240,9 @@ class video_entry(media_entry):
     
     
 class music_entry(media_entry):
+    """
+        a media entry containing music files
+    """
     accepted_music_formats = ('.mp3', '.wma', '.flac','.ogg')
     
     def __init__(self,path, tags=[], artist=[], genre=['unknown'],style='random'):
@@ -227,6 +253,9 @@ class music_entry(media_entry):
         
     
 class picture_entry(media_entry):
+    """
+        a media entry containing picture files
+    """
     accepted_picture_formats = ('.png', '.jpg', '.jpeg','.tiff','.bmp')   
     
     def __init__(self,path, tags=[],style='first'):
@@ -235,6 +264,9 @@ class picture_entry(media_entry):
     
     
 class executable_entry(media_entry):
+    """
+        a media entry containing executables
+    """
     accepted_exe_formats = ('.exe','.jar')
     
     def __init__(self,path, tags=[],style='first'):

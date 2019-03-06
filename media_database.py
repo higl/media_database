@@ -17,6 +17,12 @@ else:
         return ' '.join(quote(arg) for arg in seq)
 
 class media_database:
+    """
+        a media_database stores, media_entries. 
+        It can save and load it from disk, 
+        search through it and provide information
+        needed to display the media entries properly 
+    """
     import os
     import pickle
     #//TODO convert strings into raw strings
@@ -47,6 +53,10 @@ class media_database:
         return
     
     def _load_(self,d):
+        """
+            load a media database from filepath d
+            \\TODO introduce versioning here
+        """
         with open(d, 'rb') as input:
             db = pickle.load(input)
             self.dlist = db['dlist']
@@ -59,6 +69,10 @@ class media_database:
         self.saved = True
             
     def save(self):
+        """
+            save the media database to disk via pickle
+            uses its own hash as the filename
+        """
         self.saved = True
         out = {}
         out['dlist']=self.dlist
@@ -73,6 +87,11 @@ class media_database:
             
     def get_random_entry(self,single=False,selection=None):
         """
+            gives back a random entry.
+
+            If single=True it will make sure that items are not repeated,
+            until every item has been selected once before 
+
             slection mode does not add to single mode
         """
         if selection != None:
@@ -93,6 +112,9 @@ class media_database:
         
     
     def fill(self,d,ty='unknown'):
+        """
+            fills all the media entries in directory d into the media database
+        """
         self.dlist = self.find_media_entries(d,ty)
         for d in self.dlist:
             for a in d.attrib.keys():
@@ -103,6 +125,15 @@ class media_database:
         saved = False
     
     def update(self,d,ty='unknown'):
+        """
+            if new media entries are created or old ones are deleted from disk,
+            the media database will usually not react to it
+            
+            update searches the directory d and compares the media entries in it 
+            with all the media entries. 
+            Removes those that are not there anymore and
+            adds those that are missing in the current list 
+        """
         inlist = self.find_media_entries(d,ty)
         curlist = list(self.dlist)
         for i in inlist:
@@ -122,6 +153,12 @@ class media_database:
         self.saved = False
         
     def find_media_entries(self,d,ty):
+        """
+            search for all folder/files in the directory d.
+            It will create a media entry for each folder/file it finds.
+            ty specifies the type of media entries that will be created
+            if ty == unknown, the type of each media entry will be determined separately
+        """
         res = []
         for i in os.listdir(d):
             path = d + '/' + i 
@@ -224,7 +261,10 @@ class media_database:
         self.mtime = time()
 
         
-    def delete_entry(self,entry,delete_from_disk=False):
+    def delete_entry(self,entry):
+        """
+            remove a media entry from the database
+        """
         self.dlist.remove(entry)
         for a in entry.attrib.keys():
             self.alist[a] = self.alist[a] - 1
@@ -237,11 +277,15 @@ class media_database:
         
     def change_style(self):
         """
+            changes the execution style for a specific media entry type
             //TODO this has to be done for every element of the respective type
         """
         print 'done'
         
     def get_selection(self,*args,**kwargs):
+        """
+            filters all media entries. Uses the match_selection function of the entries
+        """
         l = []
         for i in self.dlist:
             if i.match_selection(*args,**kwargs):
@@ -249,6 +293,9 @@ class media_database:
         return l
         
     def get_entry(self,name):
+        """
+            searches for a media entry by its hash
+        """
         # \\TODO is this used?
         hash = hash(name)
         for i in dlist:
@@ -258,6 +305,9 @@ class media_database:
         return None
     
     def find_entry(self,dstring):
+        """
+            searches for a media entry by its display string
+        """
         for i in self.dlist:
             if i.get_display_string() == dstring:
                 return i
@@ -265,6 +315,10 @@ class media_database:
         return None
         
     def get_attrib_stat(self):
+        """
+            returns statistics about the attributes 
+            used in all the media entries of the database
+        """
         attrib = {'Type':{'undefined':0}}
         empty = 0
         for i in self.dlist:
@@ -300,4 +354,7 @@ class media_database:
         return attrib
     
     def get_entry_count(self):
+        """
+            how many media entries do we have?
+        """
         return len(self.dlist)
