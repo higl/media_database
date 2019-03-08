@@ -1555,6 +1555,10 @@ class CompareWindow(tk.Toplevel):
         self.override = tk.IntVar()
         self.overrideBox = tk.Checkbutton(self,text='override',variable=self.override)
         self.overrideBox.grid(row=orow+6,column=ocol,columnspan=2,**options)
+
+        self.pmode = tk.IntVar()
+        self.pmodeBox = tk.Checkbutton(self,text='picture mode',variable=self.pmode)
+        self.pmodeBox.grid(row=orow+7,column=ocol,columnspan=2,**options)
         
         self.abortButton = tk.Button(self,text='Abort')
         self.abortButton.grid(row=orow+23,column=ocol, columnspan=2,**options)
@@ -1622,12 +1626,18 @@ class CompareWindow(tk.Toplevel):
         self.maxScoreEntry.grid(row=rorow+2,column=rocol+1,columnspan=1,**options)
         self.maxScoreEntry.insert(tk.END,'100')
 
+        self.minEntryLabel = tk.Label(self,text='# matches')
+        self.minEntryLabel.grid(row=rorow+3,column=rocol,columnspan=1,**options)
+        self.minEntry = tk.Entry(self)
+        self.minEntry.grid(row=rorow+3,column=rocol+1,columnspan=1,**options)
+        self.minEntry.insert(tk.END,'1')
+        
         self.ignoreSelf = tk.IntVar()
         self.ignoreSelfBox = tk.Checkbutton(self,text='ignore self match',variable=self.ignoreSelf)
-        self.ignoreSelfBox.grid(row=rorow+3,column=rocol,columnspan=2,**options)
+        self.ignoreSelfBox.grid(row=rorow+4,column=rocol,columnspan=2,**options)
         
         self.updateButton = tk.Button(self,text='update result')
-        self.updateButton.grid(row = rorow+4,column=rocol,columnspan=2,**options)
+        self.updateButton.grid(row = rorow+5,column=rocol,columnspan=2,**options)
         self.updateButton.bind("<Button-1>", self.update_result)
 
         self.addButton = tk.Button(self,text='add to db')
@@ -1669,8 +1679,12 @@ class CompareWindow(tk.Toplevel):
             self.error.set('Input and Output have to be folders')
             return
         
-        self.infiles  = eace.findFiles(self.inp,formats=eace.vformats)
-        self.outfiles = eace.findFiles(self.outp,formats=eace.vformats)
+        if self.pmode.get():
+            self.infiles  = eace.findFiles(self.inp,formats=eace.pformats,return_root=True)
+            self.outfiles = eace.findFiles(self.outp,formats=eace.pformats,return_root=True)
+        else:
+            self.infiles  = eace.findFiles(self.inp,formats=eace.vformats)
+            self.outfiles = eace.findFiles(self.outp,formats=eace.vformats)
             
         self.infiles = sorted(self.infiles)
         self.outfiles = sorted(self.outfiles)
@@ -1716,7 +1730,7 @@ class CompareWindow(tk.Toplevel):
             proc = self.procEntry.get()
             quality = self.qualityEntry.get()
             for e,i in enumerate(self.infiles):
-                desc = self.get_video_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
+                desc = self.get_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
                 self.infingerprints.append((i,desc))
                 self.error.set('querry %d/%d done' %(e+1,len(self.infiles)))
                 if self.abort:
@@ -1726,7 +1740,7 @@ class CompareWindow(tk.Toplevel):
             
             self.error.set('source 0/%d done' %len(self.outfiles))
             for e,i in enumerate(self.outfiles):
-                desc = self.get_video_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
+                desc = self.get_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
                 self.outfingerprints.append((i,desc))
                 self.error.set('source %d/%d done' %(e+1,len(self.outfiles)))
                 if self.abort:
@@ -1734,7 +1748,10 @@ class CompareWindow(tk.Toplevel):
                     self.abort = False
                     return
             res_file = str(hash(self.inp) + hash(self.outp))
-            res_file = res_file + '.res'
+            if self.pmode.get():
+                res_file = res_file + '.picres'
+            else:
+                res_file = res_file + '.res'
             
             
             
@@ -1799,9 +1816,15 @@ class CompareWindow(tk.Toplevel):
                 save = False
                 for k,j in enumerate(outlist): 
                     if compute[k]:
-                        res = eacc.compare_clips(i[1],j[1],orb_matcher=matcher)
+                        if self.pmode.get():
+                            res = eacc.compare_pictures(i[1],j[1],orb_matcher=matcher)
+                        else:
+                            res = eacc.compare_clips(i[1],j[1],orb_matcher=matcher)
                         if crosscheck:
-                            revres = eacc.compare_clips(j[1],i[1],orb_matcher=matcher)
+                            if self.pmode.get():
+                                revres = eacc.compare_pictures(j[1],i[1],orb_matcher=matcher)
+                            else:
+                                revres = eacc.compare_clips(j[1],i[1],orb_matcher=matcher)
                             self.result[i[0]].append((j[0],res,revres))
                         else:
                             self.result[i[0]].append((j[0],res))
@@ -1826,18 +1849,28 @@ class CompareWindow(tk.Toplevel):
             return    
     
     
-    def get_video_descriptor(self,file,fps=3,nsec=180,proc=1,quality='320x640',override=False):
+    def get_descriptor(self,file,fps=3,nsec=180,proc=1,quality='320x640',override=False):
         """
             find all the fingerprint (descriptor) files of the involved videos. 
             If no fingerprint file exists, it will be created
         """
-        descriptor_file = file+'.dscr'
-        
+        pmode = self.pmode.get()
+        if pmode:
+            descriptor_file = os.path.join(file,'img.dscr')
+        else:
+            descriptor_file = file+'.dscr'
+    
         if os.path.isfile(descriptor_file) and not override:
             with open(descriptor_file, 'rb') as input:
                 descriptor = pickle.load(input)
         else:
-            descriptor = eacc.get_video_descriptor(file,nfps=fps,nkey=nsec,processes=proc,quality=quality)
+            if pmode:
+                files = eace.findFiles(file,formats=eace.pformats)
+                files = sorted(files)
+                descriptor = eacc.get_picture_descriptor(files,quality=quality)
+            else:
+                descriptor = eacc.get_video_descriptor(file,nfps=fps,nkey=nsec,processes=proc,quality=quality)
+            
             with open(descriptor_file, 'wb') as output:
                 pickle.dump(descriptor, output, pickle.HIGHEST_PROTOCOL)
         
@@ -1850,7 +1883,10 @@ class CompareWindow(tk.Toplevel):
         """
         vmin = float(self.minScoreEntry.get())
         vmax = float(self.maxScoreEntry.get())
-        self.resultframe.update_widgets(self.result,vmin=vmin,vmax=vmax,ignoreSelf=self.ignoreSelf.get())
+        nmin = float(self.minEntry.get())
+        self.resultframe.update_widgets(self.result,
+                vmin=vmin,vmax=vmax,nmin=nmin,
+                ignoreSelf=self.ignoreSelf.get(),pmode=self.pmode.get())
         self.resultframe.update_idletasks()
         self.resultCanvas.config(scrollregion=self.resultCanvas.bbox("all"))
     
@@ -1943,9 +1979,10 @@ class resultFrame(tk.Frame):
         self.grid()
         self.vmin = 0
         self.vmax = 0
+        self.nmin = 0
         self.ignore = False
         
-    def update_widgets(self,result,vmin=0,vmax=0,ignoreSelf=None):
+    def update_widgets(self,result,vmin=0,vmax=0,nmin=0,ignoreSelf=None,pmode=False):
         """
             select the results that have a probability score between vmin and vmax and display them 
         """
@@ -1954,22 +1991,36 @@ class resultFrame(tk.Frame):
             self.vmin = vmin
         if vmax > 0:
             self.vmax = vmax
+        if nmin > 0:
+            self.nmin = nmin
         if ignoreSelf != None:
             self.ignore = ignoreSelf
         row = 0
-        
+        if pmode:
+            scoreindex = 4
+        else:
+            scoreindex = 6
+            
         for i in sorted(result.keys()):
             for j in result[i]:
                 if j[1].shape[1]>0:
                     if self.ignore and i==j[0]:
                         continue
-                    s = max(j[1][6,:])
+                    elif pmode:
+                        nmatch = 0
+                        for l in range(j[1].shape[1]):
+                            nmatch = nmatch + j[1][1,l]-j[1][0,l] + 1
+                        if nmatch < nmin:
+                            continue
+                            
+                    s = max(j[1][scoreindex,:])
+                        
                     if len(j) > 2:
-                        revs = max(j[2][6,:])
+                        revs = max(j[2][scoreindex,:])
                         s = max([s,revs])
                         
                     if s >= self.vmin and s <= self.vmax:
-                        self.resultList.append(resultElement(i,j[0],s,master=self,result=result))
+                        self.resultList.append(resultElement(i,j[0],s,master=self,result=result,pmode=pmode))
                             
                         self.resultList[-1].grid(row=row,column=0,columnspan=5,rowspan=2)
                         row = row+2
@@ -1985,12 +2036,16 @@ class resultElement(tk.Frame):
         includes buttons to watch source and query file, 
         and to delete the query file in case it is found to be a dublicate
     """
-    def __init__(self,querry,source,score,master=None,result=None):
+    def __init__(self,querry,source,score,master=None,result=None,pmode=False):
         tk.Frame.__init__(self,master)
         self.querry = querry
-        self.querryE = me.video_entry(querry)
         self.source = source
-        self.sourceE = me.video_entry(source)
+        if pmode:
+            self.querryE = me.picture_entry(querry)
+            self.sourceE = me.picture_entry(source)
+        else:
+            self.querryE = me.video_entry(querry)
+            self.sourceE = me.video_entry(source)
         self.score = score
         self.result = result
         self.grid()

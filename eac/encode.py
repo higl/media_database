@@ -3,6 +3,7 @@ import subprocess
 import tempfile
 
 vformats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg','.MP4')
+pformats = ('.png', '.jpg', '.jpeg','.tiff','.bmp','.JPG','.JPEG')
 
 def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',processes=1,audio='mp4',override=False,options=None):
     """
@@ -197,19 +198,29 @@ def cut_video(input,outpath,start,length,filename=None,override=True,encoder='ff
     return output    
 
     
-def findFiles(path,formats=()):
+def findFiles(path,formats=(),return_root=False):
     """
-        find all video files in path that have the specified formats
+        find all files in path that have the specified formats
     """
-    list = []
+    l = []
     if os.path.isdir(path):         
         for root, dirs, files in os.walk(path, topdown=False):
             for name in files:
                 if len(formats) == 0:
-                    list.append(os.path.join(root, name))
+                    if return_root:
+                        l.append(root)
+                    else:    
+                        l.append(os.path.join(root, name))
                 elif name.endswith(formats):
-                    list.append(os.path.join(root, name))
-    return list
+                    if return_root:
+                        l.append(root)
+                    else:    
+                        l.append(os.path.join(root, name))
+
+    if root:
+        l = list(set(l))
+    return l
+
     
 def rreplace(s,old,new,number):
     """

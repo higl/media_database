@@ -69,7 +69,8 @@ class media_entry:
                         return fileList
           
             folderList.pop(0)
-        
+            
+        fileList = sorted(fileList)
         if len(fileList)==0:
             return ['']
             #raise NoExecutableFileFoundException
@@ -230,7 +231,7 @@ class video_entry(media_entry):
     """
         a media entry containing video files
     """
-    accepted_video_formats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg')
+    accepted_video_formats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg','.MP4')
         
     def __init__(self,path, tags=[], actors=[], genre='unknown',style='first'):
         media_entry.__init__(self,path,type='video',format=self.accepted_video_formats)
@@ -256,7 +257,7 @@ class picture_entry(media_entry):
     """
         a media entry containing picture files
     """
-    accepted_picture_formats = ('.png', '.jpg', '.jpeg','.tiff','.bmp')   
+    accepted_picture_formats = ('.png', '.jpg', '.jpeg','.tiff','.bmp','.JPG','.JPEG')   
     
     def __init__(self,path, tags=[],style='first'):
         media_entry.__init__(self,path,type='picture',format=self.accepted_picture_formats)

@@ -161,6 +161,56 @@ def get_fingerprints(kframes,gkframes,tstart,tend,thrs=0.5,nfeatures=400,nlevels
     fprin['nframes'] = len(fprin['thumb'])      
     return fprin
 
+def get_picture_descriptor(pictures,quality='320x640',interp=cv2.INTER_AREA):
+    """
+        get a single decriptor file for a picture folder. 
+        All pictures in there will be used as "keyframes" 
+        and can later be compared with the same algorithm as the video comparison.
+        This way we can compare picture folders, 
+        rather than comparing each picture with every other, 
+        which potentially is very time consuming.
+        
+        paramters:
+            pictures: a list of picture files that should be used for the descriptor
+        keywords:
+            quality: sets the size of the image from which the fingerprints are computed
+            interp: which interpolation method should be used. Defaults to inter_area
+    """
+    
+    orbfunc = cv2.ORB_create(nfeatures=400,nlevels=15)
+    
+    N_opts = {'320x640':320,'qcif':72}
+    try:
+        N = N_opts[quality]
+        M = 2*N
+    except:
+        print 'Erro: not a valid quality option for the encoding'
+        return
+    
+    #define the decriptor dictionary
+    desc = {'thumb': [],'cc': [],'orb': [],'nframes': len(pictures)}
+
+    #change resolution to MxN with N=2xM 
+    for pic in pictures:
+        img = cv2.imread(pic,1)
+        if img is None:
+            desc['nframes'] = desc['nframes']-1
+            continue
+        img = cv2.resize(img,(M,N),interpolation=interp)
+        grey = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
+        flip = cv2.flip(grey,0)
+        grey = np.concatenate((grey,flip),axis=1)
+        ### 1. Fingerprint 
+        th = thumbnail(grey)
+        desc['thumb'].append(th)
+        ### 2. Fingerprint
+        cc = color_correlation(img)
+        desc['cc'].append(cc)
+        ### 3. Fingerprint (local)
+        orb = orb_detection(grey,orb=orbfunc)
+        desc['orb'].append(orb[1])        
+    
+    return desc
 
 ### 1. Fingerprint
 def thumbnail(frame,interp=cv2.INTER_AREA):
@@ -270,7 +320,7 @@ def compare_frame(querry,source,wth=0.25,wcc=0.25,worb=0.5,qth=0.5,qcc=0.75,qorb
 def compare_clips(querry,source,threshold=0.75,orb_matcher=None):
     """
         compare two clips based on their keyframes. 
-        Returns the maximum probability score of all the keyframe pares 
+        Returns the maximum probability score of all the keyframe pairs 
     """
     start_match_q = []
     end_match_q = []
@@ -313,6 +363,45 @@ def compare_clips(querry,source,threshold=0.75,orb_matcher=None):
 
     return np.array([idf_q, start_match_q,end_match_q ,idf_s, start_match_s,end_match_s,score],dtype = 'uint32')
 
+    
+def compare_pictures(querry,source,threshold=0.75,orb_matcher=None):
+    """
+        compare two picture sets. 
+        Returns the maximum probability score of all the picture pairs 
+    """
+    idf_q_start = []
+    idf_q_end = []
+    idf_s_start = []
+    idf_s_end = []
+    score = []
+    for i in range(querry['nframes']):
+        if len(idf_q_start)>0 and idf_q_end[-1] == i-1:
+            offset = idf_s_start[-1]+1
+        else:
+            offset = 0
+            
+        for j in range(offset,source['nframes']):
+            thq = querry['thumb'][i]
+            ths = source['thumb'][j]
+            ccq = querry['cc'][i]
+            ccs = source['cc'][j]
+            orbq = querry['orb'][i]
+            orbs = source['orb'][j]
+            sim = compare_frame([thq,ccq,orbq],[ths,ccs,orbs],orb_matcher=orb_matcher)
+            if sim > threshold:
+                if len(idf_q_start) > 0 and idf_q_end[-1] == i-1:
+                    idf_q_end[-1] = i
+                    idf_s_end[-1] = j
+                    score[-1] = max([score[-1],sim*100]) 
+                else:
+                    idf_q_start.append(i)
+                    idf_q_end.append(i)
+                    idf_s_start.append(j)
+                    idf_s_end.append(j)
+                    score.append(sim*100)
+                break
+
+    return np.array([idf_q_start, idf_q_end, idf_s_start, idf_s_end,score],dtype = 'uint32')
 
 def distance(querry,source,length=7):
     """
