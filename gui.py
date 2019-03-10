@@ -1578,6 +1578,9 @@ class CompareWindow(tk.Toplevel):
         self.rquerryLabel = tk.Label(self,text='Querry path')
         self.rquerryLabel.grid(row=rrow+2,column=rcol,columnspan=2,**options)
         
+        self.rinfoLabel = tk.Label(self,text='# or min / max(Score)')
+        self.rinfoLabel.grid(row=rrow+2,column=rcol+3,columnspan=1,**options)
+        
         self.rsourceLabel = tk.Label(self,text='Source path')
         self.rsourceLabel.grid(row=rrow+2,column=rcol+4,columnspan=2,**options)
         
@@ -1738,15 +1741,18 @@ class CompareWindow(tk.Toplevel):
                     self.abort = False
                     return
             
-            self.error.set('source 0/%d done' %len(self.outfiles))
-            for e,i in enumerate(self.outfiles):
-                desc = self.get_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
-                self.outfingerprints.append((i,desc))
-                self.error.set('source %d/%d done' %(e+1,len(self.outfiles)))
-                if self.abort:
-                    self.error.set('source %d/%d done - aborted' %(e+1,len(self.outfiles)))
-                    self.abort = False
-                    return
+            if self.querrysource.get():
+                self.outfingerprints = self.infingerprints
+            else:
+                self.error.set('source 0/%d done' %len(self.outfiles))
+                for e,i in enumerate(self.outfiles):
+                    desc = self.get_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
+                    self.outfingerprints.append((i,desc))
+                    self.error.set('source %d/%d done' %(e+1,len(self.outfiles)))
+                    if self.abort:
+                        self.error.set('source %d/%d done - aborted' %(e+1,len(self.outfiles)))
+                        self.abort = False
+                        return
             res_file = str(hash(self.inp) + hash(self.outp))
             if self.pmode.get():
                 res_file = res_file + '.picres'
@@ -2012,7 +2018,13 @@ class resultFrame(tk.Frame):
                             nmatch = nmatch + j[1][1,l]-j[1][0,l] + 1
                         if nmatch < nmin:
                             continue
-                            
+                    else:
+                        nmatch = 0.0
+                        for l in range(j[1].shape[1]):
+                            nmatch = nmatch + j[1][2,l]-j[1][1,l]
+                        nmatch = nmatch / 1000.0 / 60.0 # going back to minutes
+                        if nmatch < nmin:
+                            continue   
                     s = max(j[1][scoreindex,:])
                         
                     if len(j) > 2:
@@ -2020,7 +2032,7 @@ class resultFrame(tk.Frame):
                         s = max([s,revs])
                         
                     if s >= self.vmin and s <= self.vmax:
-                        self.resultList.append(resultElement(i,j[0],s,master=self,result=result,pmode=pmode))
+                        self.resultList.append(resultElement(i,j[0],s,nmatch,master=self,result=result,pmode=pmode))
                             
                         self.resultList[-1].grid(row=row,column=0,columnspan=5,rowspan=2)
                         row = row+2
@@ -2036,10 +2048,11 @@ class resultElement(tk.Frame):
         includes buttons to watch source and query file, 
         and to delete the query file in case it is found to be a dublicate
     """
-    def __init__(self,querry,source,score,master=None,result=None,pmode=False):
+    def __init__(self,querry,source,score,nmatch,master=None,result=None,pmode=False):
         tk.Frame.__init__(self,master)
         self.querry = querry
         self.source = source
+        self.pmode = pmode
         if pmode:
             self.querryE = me.picture_entry(querry)
             self.sourceE = me.picture_entry(source)
@@ -2047,6 +2060,7 @@ class resultElement(tk.Frame):
             self.querryE = me.video_entry(querry)
             self.sourceE = me.video_entry(source)
         self.score = score
+        self.nmatch = nmatch
         self.result = result
         self.grid()
         self.createWidgets()
@@ -2068,7 +2082,7 @@ class resultElement(tk.Frame):
             self.sourceLabel = tk.Label(self,text=s,width = 30)
         self.sourceLabel.grid(row=0,column=3,columnspan=2,**options)
 
-        self.scoreLabel = tk.Label(self,text=str(int(self.score)),width = 5)
+        self.scoreLabel = tk.Label(self,text='%3.1f / %3.1f' %(self.nmatch, self.score),width = 11)
         self.scoreLabel.grid(row=0,column=2,columnspan=1,**options)
     
         self.watchqButton = tk.Button(self,text='Watch',width = 5)
@@ -2108,7 +2122,7 @@ class resultElement(tk.Frame):
             "This will erase " + self.querryE.get_display_string() + " from the harddisk! Continue?"):
             self.querryE.delete()
             self.result.pop(self.querry)
-            self.master.update_widgets(self.result)
+            self.master.update_widgets(self.result,pmode=self.pmode)
             self.destroy()
         else:
             return
