@@ -1,6 +1,8 @@
 import os
 import subprocess
 import tempfile
+import threading
+import pickle
 
 vformats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg','.MP4')
 pformats = ('.png', '.jpg', '.jpeg','.tiff','.bmp','.JPG','.JPEG')
@@ -198,29 +200,115 @@ def cut_video(input,outpath,start,length,filename=None,override=True,encoder='ff
     return output    
 
     
-def findFiles(path,formats=(),return_root=False):
+def findFiles(path,formats=(),return_root=False,single_level=False):
     """
         find all files in path that have the specified formats
     """
     l = []
-    if os.path.isdir(path):         
-        for root, dirs, files in os.walk(path, topdown=False):
-            for name in files:
-                if len(formats) == 0:
-                    if return_root:
-                        l.append(root)
-                    else:    
-                        l.append(os.path.join(root, name))
-                elif name.endswith(formats):
-                    if return_root:
-                        l.append(root)
-                    else:    
-                        l.append(os.path.join(root, name))
+    if not os.path.isdir(path):
+        return [path]
 
-    if root:
+    for root, dirs, files in os.walk(path, topdown=False):
+        for name in files:
+            if len(formats) == 0:
+                if return_root:
+                    l.append(root)
+                elif single_level: 
+                    if root == path:
+                        l.append(os.path.join(root, name))
+                    else:
+                        continue
+                else:    
+                    l.append(os.path.join(root, name))
+            elif name.endswith(formats):
+                if return_root:
+                    l.append(root)
+                elif single_level:
+                    if root == path:
+                        l.append(os.path.join(root, name))
+                    else:
+                        continue
+                else:    
+                    l.append(os.path.join(root, name))
+
+    if return_root:
         l = list(set(l))
     return l
 
+class encode_thread(threading.Thread):
+    """
+        picks all files from the input folder, 
+        encodes it and stores the necessary information
+        to check the result later on (also to know which
+        output video is based on which input video).
+        
+        the function also takes care of too long filenames (needed for windows) 
+    """
+    # this lock is used for communication between
+    # several encode threads working on the same problem
+    # (not yet implemented)
+    lock = threading.Lock() 
+
+    def __init__(self,infiles,outpath,result,resultfile,
+                quality='low',proc='4',extend=True):
+        threading.Thread.__init__(self)
+        self.infiles = infiles
+        self.resultfile = resultfile
+        self.result = result
+        self.outpath = outpath
+        self.update = False
+        self.abort = False
+        self.quality = quality
+        self.proc = proc
+        self.extend = extend
+        # this lock is used for communication with the gui 
+        # (or any other thread of a different class)
+        self.self_lock = threading.Lock()
+        return
+        
+    def run(self):
+        for i in self.infiles:
+            if self.result.has_key(i):
+                continue
+            if len(i) > 258:
+                orig = os.path.normpath(i)
+                # fix for long filenames
+                prefix = u'\\\\?\\'
+                temp,inp = os.path.split(orig)
+                
+                temp = os.path.dirname(temp)
+                if len(inp) > 150:
+                    inp[-50:]
+                while len(temp) + len(inp) > 258:
+                    t = os.path.dirname(temp)
+                    if t == temp:
+                        raise ThisIsRidiculousError(
+                            'these pathnames are stupid'
+                            )
+                    else:
+                        temp = t                
+                inp = temp + '\\' + inp
+                os.rename(prefix+orig,inp)
+                i = inp
+            out = encode(
+                i,self.outpath,
+                inpath_is_file=True,quality=self.quality,
+                encoder='ffmpeg',processes=self.proc,
+                audio='mp4',override=self.extend
+                )
+            self.self_lock.acquire()
+            self.result[i] = out
+            self.self_lock.release()
+            with open(self.resultfile, 'wb') as output:
+                pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+            
+            self.self_lock.acquire()
+            self.update = True
+            if self.abort:
+                self.abort = False
+                return
+            self.self_lock.release()
+        return
     
 def rreplace(s,old,new,number):
     """

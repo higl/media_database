@@ -395,7 +395,7 @@ class SelectorFrame(tk.Frame):
         for e,i in enumerate(self.LabelList):
             var = self.VarList[e].get()
             uString = self.EntryList[e].get()
-            uString = updateString(uString)
+            uString = mdb_util.updateString(uString)
             if var == '-' or len(uString) == 0:
                 continue
             args[self.VarList[e].get()] = uString
@@ -509,7 +509,7 @@ class InfoFrame(tk.Frame):
                     nLabel.grid(row=r,column=c)
                     self.LabelList.append(nLabel)
                     
-                    eString = displayString(e.attrib[i])
+                    eString = mdb_util.displayString(e.attrib[i])
                     nEntry = tk.Entry(self)
                     nEntry.insert(0,eString)
                     nEntry.grid(row=r,column=c+1,columnspan=5,**options)
@@ -531,7 +531,7 @@ class InfoFrame(tk.Frame):
                     newLabel = tk.OptionMenu(self,newVar,*e.attrib.keys(),command=self.updateEntry)
                     newLabel.grid(row=r,column=c,**options)
                     
-                    eString = displayString(e.attrib[i])
+                    eString = mdb_util.displayString(e.attrib[i])
                     newEntry = tk.Entry(self)
                     newEntry.insert(0,eString)                
                     newEntry.grid(row=r,column=c+1,columnspan=5,**options)
@@ -553,7 +553,7 @@ class InfoFrame(tk.Frame):
         i = self.LabelList.index(w)
         self.EntryList[i].delete(0,tk.END)
         a = self.VarList[i].get()
-        eString = displayString(self.entry.attrib[a])
+        eString = mdb_util.displayString(self.entry.attrib[a])
         self.EntryList[i].insert(0,eString)
         
     def clearLists(self):
@@ -710,7 +710,7 @@ class InfoWindow(tk.Toplevel):
             nLabel.grid(row=r,column=1)
             self.LabelList.append(nLabel)
             
-            eString = displayString(self.entry.attrib[i])
+            eString = mdb_util.displayString(self.entry.attrib[i])
             nEntry = tk.Entry(self)
             nEntry.insert(0,eString)
             nEntry.grid(row=r,column=2,columnspan=5)
@@ -759,7 +759,7 @@ class InfoWindow(tk.Toplevel):
         attrib = {}
         for e,i in enumerate(self.LabelList):
             uString = self.EntryList[e].get()
-            uString = updateString(uString)
+            uString = mdb_util.updateString(uString)
             attrib[i.cget('text')] = uString
         
         self.entry.update_attrib(**attrib)
@@ -785,7 +785,7 @@ class InfoWindow(tk.Toplevel):
         attrib = {}
         for e,i in enumerate(self.LabelList):
             uString = self.EntryList[e].get()
-            uString = updateString(uString)
+            uString = mdb_util.updateString(uString)
             attrib[i.cget('text')] = uString
             if len(uString) == 0:
                 continue
@@ -1146,57 +1146,41 @@ class EncodeWindow(tk.Toplevel):
         if self.thread != None and self.thread.is_alive():
             return
         else:
-            kwargs = {}
-            kwargs['quality'] = self.qualityEntry.get()
-            kwargs['proc'] = self.procEntry.get()
-            kwargs['extend'] = self.extend.get()
-
-            self.thread = threading.Thread(target=self.encode_thread,kwargs=kwargs)
-            self.thread.setDaemon(True)
-            self.thread.start()
-    
-    def encode_thread(self,quality='low',proc='4',extend=True):
+            if self.ready:
+                self.error.set('')
+                kwargs = {}
+                kwargs['quality'] = self.qualityEntry.get()
+                kwargs['proc'] = self.procEntry.get()
+                kwargs['extend'] = self.extend.get()
+                
+                self.thread = eace.encode_thread(
+                                self.infiles,self.outp,
+                                self.result,self.resultfile,
+                                **kwargs
+                                )
+                self.thread.setDaemon(True)
+                self.thread.start()
+                self.after(1000,self.checkEncodeThread)
+                return
+            else:
+                self.error.set(
+                    'first check the given input and output folder'
+                    )
+                return
+                
+    def checkEncodeThread(self):
         """
-            picks all files from the input folder, 
-            encodes it and stores the necessary information
-            to check the result later on (also to know which
-            output video is based on which input video).
-            
-            the function also takes care of too long filenames (needed for windows) 
+            check status of encode thread. 
+            updates the local copy of the thread results if necessary
         """
-        if self.ready:
-            self.error.set('')
-            for i in self.infiles:
-                if self.result.has_key(i):
-                    continue
-                if len(i) > 258:
-                    orig = os.path.normpath(i)
-                    # fix for long filenames
-                    prefix = u'\\\\?\\'
-                    temp,inp = os.path.split(orig)
-                    
-                    temp = os.path.dirname(temp)
-                    if len(inp) > 150:
-                        inp[-50:]
-                    while len(temp) + len(inp) > 258:
-                        t = os.path.dirname(temp)
-                        if t == temp:
-                            raise ThisIsRidiculousError('these pathnames are stupid')
-                        else:
-                            temp = t                
-                    inp = temp + '\\' + inp
-                    os.rename(prefix+orig,inp)
-                    i = inp
-                out = eace.encode(i,self.outp,inpath_is_file=True,quality=quality,encoder='ffmpeg',processes=proc,audio='mp4',override=extend)
-                self.result[i] = out
-                with open(self.resultfile, 'wb') as output:
-                    pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
-
-                if self.abort:
-                    self.abort = False
-                    return
+        if self.thread is not None and self.thread.is_alive():
+            self.thread.self_lock.acquire()
+            if self.thread.update:
+                self.result = self.thread.result
+                self.thread.update = False
+            self.thread.self_lock.release()
+            self.after(1000,self.checkEncodeThread)
         else:
-            self.error.set('first check the given input and output folder')
             return
 
     def abort_thread(self,event):
@@ -1205,7 +1189,10 @@ class EncodeWindow(tk.Toplevel):
             to it that forces it to abort after the next encode finishes
         """
         if self.thread != None and self.thread.is_alive():
-            self.abort = True
+            self.thread.self_lock.acquire()
+            self.thread.abort = True
+            self.thread.self_lock.release()
+        return
             
     def onClose(self):
         """
@@ -1218,6 +1205,7 @@ class EncodeWindow(tk.Toplevel):
             self.destroy()
         else:
             self.destroy()
+        return
             
 class CheckWindow(tk.Toplevel):
     """
@@ -1871,7 +1859,7 @@ class CompareWindow(tk.Toplevel):
                 descriptor = pickle.load(input)
         else:
             if pmode:
-                files = eace.findFiles(file,formats=eace.pformats)
+                files = eace.findFiles(file,formats=eace.pformats,single_level=True)
                 files = sorted(files)
                 descriptor = eacc.get_picture_descriptor(files,quality=quality)
             else:
@@ -2147,29 +2135,7 @@ class AutoScrollbar(tk.Scrollbar):
         raise TclError("cannot use place with this widget")
 
 
-def updateString(s):
-    """
-        takes a string and splits it up into single attributes (separeted by comma),
-        that can be added to a media entry 
-    """
-    tmpstr = s.split(',')
-    tmpstr = list(map(lambda x: x.lstrip(),tmpstr))
-    tmpstr = list(map(lambda x: x.rstrip(),tmpstr)) 
-    tmpstr = filter(lambda x: x != '', tmpstr)
-    return tmpstr
 
-def displayString(s):
-    """
-        takes a list of strings (typically all the attributes of a media entry) 
-        and combines them into a nice string to display them
-    """
-    tmpstr = ''
-    for i in s:
-        tmpstr = tmpstr + ' , ' + i
-    
-    tmpstr = tmpstr.lstrip(' , ')    
-    tmpstr = tmpstr.rstrip(' , ')
-    return tmpstr
     
             
 app = Application()
