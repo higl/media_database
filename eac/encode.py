@@ -306,6 +306,7 @@ class encode_thread(threading.Thread):
             self.update = True
             if self.abort:
                 self.abort = False
+                self.self_lock.release()
                 return
             self.self_lock.release()
         return

@@ -1503,7 +1503,7 @@ class CompareWindow(tk.Toplevel):
         
         self.compareButton = tk.Button(self,text='Compare')
         self.compareButton.grid(row=rio+23,column=cio+3, columnspan=2,**options)
-        self.compareButton.bind("<Button-1>", self.encode)
+        self.compareButton.bind("<Button-1>", self.compare)
         
         #options block
         orow = 1
@@ -1691,184 +1691,69 @@ class CompareWindow(tk.Toplevel):
         self.ready = True
         self.error.set('')
         
-    def encode(self,event):
+
+
+    def compare(self,event):
         """
             event to start a thread that compares video files
         """
         if self.thread != None and self.thread.is_alive():
             return
         else:
-            self.thread = threading.Thread(target=self.encode_thread)
-            self.thread.setDaemon(True)
-            self.thread.start()
-    
-    def encode_thread(self):
-        """
-            compare video files
-            
-            TODO: move parts of this complicated function into 
-            separate functions to reduce duplicate code and make it more readable
-        """
-        if self.ready:
-            import gc
-            self.error.set('querry 0/%d done' %len(self.infiles))
-            self.infingerprints = []
-            self.outfingerprints = []
-            
-            
-            fps = int(self.fpsEntry.get())
-            nsec = fps * int(self.nsecEntry.get())
-            proc = self.procEntry.get()
-            quality = self.qualityEntry.get()
-            for e,i in enumerate(self.infiles):
-                desc = self.get_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
-                self.infingerprints.append((i,desc))
-                self.error.set('querry %d/%d done' %(e+1,len(self.infiles)))
-                if self.abort:
-                    self.error.set('source %d/%d done - aborted' %(e+1,len(self.infiles)))
-                    self.abort = False
-                    return
-            
-            if self.querrysource.get():
-                self.outfingerprints = self.infingerprints
-            else:
-                self.error.set('source 0/%d done' %len(self.outfiles))
-                for e,i in enumerate(self.outfiles):
-                    desc = self.get_descriptor(i,fps=fps,nsec=nsec,proc=proc,quality=quality,override=self.override.get())
-                    self.outfingerprints.append((i,desc))
-                    self.error.set('source %d/%d done' %(e+1,len(self.outfiles)))
-                    if self.abort:
-                        self.error.set('source %d/%d done - aborted' %(e+1,len(self.outfiles)))
-                        self.abort = False
-                        return
-            res_file = str(hash(self.inp) + hash(self.outp))
-            if self.pmode.get():
-                res_file = res_file + '.picres'
-            else:
-                res_file = res_file + '.res'
-            
-            
-            
-            self.error.set('matching 0/%d done' %len(self.infiles))
-           
-            if os.path.isfile(res_file) and not self.override.get():
-                with open(res_file, 'rb') as input:
-                    self.result = pickle.load(input)
-            else:
+            if self.ready:
+                self.error.set('')
+                kwargs = {}
+                kwargs['quality'] = self.qualityEntry.get()
+                kwargs['proc'] = self.procEntry.get()
+                kwargs['fps'] = int(self.fpsEntry.get())
+                kwargs['nsec'] = int(self.nsecEntry.get())
+                kwargs['override'] = self.override.get()
+                kwargs['querrysource'] = self.querrysource.get()
+                kwargs['pmode'] = self.pmode.get()
+                kwargs['crosscheck'] = self.crossCheck.get()
+                res_file = str(hash(self.inp) + hash(self.outp))
                 self.result = {}
-            
-            
-            import cv2            
-            matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-            
-            crosscheck = self.crossCheck.get()
-            
-            #cleanup old results:
-            for i in self.result.keys():
-                found = False
-                for j in self.infingerprints:
-                    if i == j[0]:
-                        found = True
-                        break
-                if not found:
-                    self.result.pop(i)
-            gc.collect()
-            
-            #compute the new results
-            for e,i in enumerate(self.infingerprints):
-                if not self.result.has_key(i[0]):
-                    self.result[i[0]] = []
-                    compute = np.ones(len(self.outfingerprints))
-                    outlist = sorted(self.outfingerprints, key=lambda x: x[0])
-                else:
-                    compute = np.ones(len(self.outfingerprints))
-                    outlist = sorted(self.outfingerprints, key=lambda x: x[0])
-                    reslist = sorted([l[0] for l in self.result[i[0]]])
-                    offset = 0
-                    for k,l in enumerate(outlist):
-                        if k-offset >= len(reslist)-1:
-                            break
-                        check = sorted([l[0],reslist[k-offset]])
-                        while l[0] != reslist[k-offset] and check[0] != l[0]:
-                            for en,t in enumerate(self.result[i[0]]):
-                                if t[0] == check[0]:
-                                    self.result[i[0]].pop(en)
-                                    break
-                            offset = offset - 1
-                            if np.abs(k-offset) >= len(reslist)-1:
-                                break
-                            check = sorted([l[0],reslist[k-offset]])
-                        if l[0] == reslist[k-offset]:
-                            compute[k] = 0
-                        else:
-                            offset = offset + 1
-                    for l in reslist[k-offset:]:
-                        for en,t in enumerate(self.result[i[0]]):
-                            if t[0] == check[0]:
-                                self.result[i[0]].pop(en)
-                                break
-                save = False
-                for k,j in enumerate(outlist): 
-                    if compute[k]:
-                        if self.pmode.get():
-                            res = eacc.compare_pictures(i[1],j[1],orb_matcher=matcher)
-                        else:
-                            res = eacc.compare_clips(i[1],j[1],orb_matcher=matcher)
-                        if crosscheck:
-                            if self.pmode.get():
-                                revres = eacc.compare_pictures(j[1],i[1],orb_matcher=matcher)
-                            else:
-                                revres = eacc.compare_clips(j[1],i[1],orb_matcher=matcher)
-                            self.result[i[0]].append((j[0],res,revres))
-                        else:
-                            self.result[i[0]].append((j[0],res))
-                            
-                        save = True
-                        
-                if save and self.override.get():
-                    with open(res_file, 'wb') as output:
-                        pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
-                self.error.set('matching %d/%d done' %(e+1,len(self.infiles)))
-                if self.abort:
-                    with open(res_file, 'wb') as output:
-                        pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
-                    self.error.set('matching %d/%d done - aborted' %(e+1,len(self.infiles)))
-                    self.abort = False
-                    return            
-                    
-            with open(res_file, 'wb') as output:    
-                pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
-        else:
-            self.error.set('first check the given input and output folder')
-            return    
-    
-    
-    def get_descriptor(self,file,fps=3,nsec=180,proc=1,quality='320x640',override=False):
-        """
-            find all the fingerprint (descriptor) files of the involved videos. 
-            If no fingerprint file exists, it will be created
-        """
-        pmode = self.pmode.get()
-        if pmode:
-            descriptor_file = os.path.join(file,'img.dscr')
-        else:
-            descriptor_file = file+'.dscr'
-    
-        if os.path.isfile(descriptor_file) and not override:
-            with open(descriptor_file, 'rb') as input:
-                descriptor = pickle.load(input)
-        else:
-            if pmode:
-                files = eace.findFiles(file,formats=eace.pformats,single_level=True)
-                files = sorted(files)
-                descriptor = eacc.get_picture_descriptor(files,quality=quality)
+                self.thread = eacc.compare_thread(
+                                self.infiles,self.outp,
+                                self.result,res_file,
+                                **kwargs
+                                )
+                self.thread.setDaemon(True)
+                self.thread.start()
+                self.after(1000,self.checkCompareThread)
+                return
             else:
-                descriptor = eacc.get_video_descriptor(file,nfps=fps,nkey=nsec,processes=proc,quality=quality)
-            
-            with open(descriptor_file, 'wb') as output:
-                pickle.dump(descriptor, output, pickle.HIGHEST_PROTOCOL)
-        
-        return descriptor
+                self.error.set(
+                    'first check the given input and output folder'
+                    )
+                return
+                
+    def checkCompareThread(self):
+        """
+            check status of encode thread. 
+            updates the local copy of the thread results if necessary
+        """
+        if self.thread is not None and self.thread.is_alive():
+            self.thread.self_lock.acquire()
+            if self.thread.update:
+                self.result = self.thread.result
+                self.error.set(self.thread.message)
+                self.thread.update = False
+            self.thread.self_lock.release()
+            self.after(1000,self.checkCompareThread)
+        else:
+            return
+
+    def abort_thread(self,event):
+        """
+            checks if an encoding thread is running and if so, sends a signal
+            to it that forces it to abort after the next encode finishes
+        """
+        if self.thread != None and self.thread.is_alive():
+            self.thread.self_lock.acquire()
+            self.thread.abort = True
+            self.thread.self_lock.release()
+        return
         
     def update_result(self,event):
         """
@@ -1884,13 +1769,6 @@ class CompareWindow(tk.Toplevel):
         self.resultframe.update_idletasks()
         self.resultCanvas.config(scrollregion=self.resultCanvas.bbox("all"))
     
-    def abort_thread(self,event):
-        """
-            checks if the compare thread is running 
-            and if so sends a signal to abort after the next result has been produced
-        """
-        if self.thread != None and self.thread.is_alive():
-            self.abort = True
             
     def add_result(self,event):
         """

@@ -4,14 +4,15 @@ import tempfile
 import numpy as np
 import scipy.spatial
 import os
-
+import threading
+import encode
+import pickle
 
 # Video transformation
 def get_video_descriptor(video,nfps=3,quality='320x640',nkey=180,processes=1):
     """
         compute the fingerprint file of a video file. 
     """
-    import encode
     
     N_opts = {'320x640':320,'qcif':72}
     try:
@@ -507,3 +508,241 @@ def rreplace(s,old,new,number):
     """
     li = s.rsplit(old, number)
     return new.join(li)
+
+def get_descriptor(file,fps=3,nsec=180,proc=1,quality='320x640',override=False,pmode=False):
+    """
+        find all the fingerprint (descriptor) files of the involved videos. 
+        If no fingerprint file exists, it will be created
+    """
+    
+    if pmode:
+        descriptor_file = os.path.join(file,'img.dscr')
+    else:
+        descriptor_file = file+'.dscr'
+
+    if os.path.isfile(descriptor_file) and not override:
+        with open(descriptor_file, 'rb') as input:
+            descriptor = pickle.load(input)
+    else:
+        if pmode:
+            files = encode.findFiles(file,formats=eace.pformats,single_level=True)
+            files = sorted(files)
+            descriptor = get_picture_descriptor(files,quality=quality)
+        else:
+            descriptor = get_video_descriptor(file,nfps=fps,nkey=nsec,processes=proc,quality=quality)
+        
+        with open(descriptor_file, 'wb') as output:
+            pickle.dump(descriptor, output, pickle.HIGHEST_PROTOCOL)
+    
+    return descriptor
+    
+class compare_thread(threading.Thread):
+    """  
+        compares video files
+        
+        TODO: move parts of this complicated function into 
+        separate functions to reduce duplicate code and make it more readable
+    """
+    
+    # this lock is used for communication between
+    # several encode threads working on the same problem
+    # (not yet implemented)
+    lock = threading.Lock() 
+
+    def __init__(self,querryfiles,sourcefiles,result,resultfile,
+                fps=3,nsec=60,proc='4',quality='320x640',
+                override=False,querrysource=False,pmode=False,
+                crosscheck=False):
+        threading.Thread.__init__(self)
+        self.querryfiles = querryfiles
+        self.sourcefiles = sourcefiles
+        self.resultfile = resultfile
+        self.result = result
+        self.fps = fps
+        self.nsec = nsec
+        self.proc = proc
+        self.quality = quality
+        self.override = override
+        self.querrysource = querrysource
+        self.pmode = pmode
+        self.crosscheck = crosscheck
+        self.update = False
+        self.abort = False
+        self.message = ''
+        # this lock is used for communication with the gui 
+        # (or any other thread of a different class)
+        self.self_lock = threading.Lock()
+        return
+        
+    def run(self):    
+        import gc
+
+        self.self_lock.acquire()
+        self.update = True
+        self.message = 'querry 0/%d done' %len(self.querryfiles)
+        self.self_lock.release()
+
+        querryfingerprints = []
+        sourcefingerprints = []
+        
+        for e,i in enumerate(self.querryfiles):
+            desc = get_descriptor(
+                i,fps=self.fps,nsec=self.nsec,
+                proc=self.proc,quality=self.quality,
+                override=self.override,pmode=self.pmode
+                )
+            querryfingerprints.append((i,desc))
+            
+            self.self_lock.acquire()
+            self.update = True
+            self.message = 'querry %d/%d done' %(e+1,len(self.querryfiles))
+            if self.abort:
+                self.message = 'querry %d/%d done - aborted' %(e+1,len(self.infiles))
+                self.abort = False
+                return
+            self.self_lock.release()
+        
+        if self.querrysource:
+            sourcefingerprints = querryfingerprints
+        else:
+            self.self_lock.acquire()
+            self.update = True
+            self.message = 'source 0/%d done' %len(self.sourcefiles)
+            self.self_lock.release()
+            for e,i in enumerate(self.sourcefiles):
+                desc = get_descriptor(
+                    i,fps=self.fps,nsec=self.nsec,
+                    proc=self.proc,quality=self.quality,
+                    override=self.override,pmode=self.pmode
+                    )
+                sourcefingerprints.append((i,desc))
+                
+                self.self_lock.acquire()
+                self.update = True
+                self.message = 'source %d/%d done' %(e+1,len(self.sourcefiles))
+                if self.abort:
+                    self.message = 'source %d/%d done - aborted' %(e+1,len(self.infiles))
+                    self.abort = False
+                    return
+                self.self_lock.release()
+                
+        if self.pmode:
+            res_file = self.resultfile + '.picres'
+        else:
+            res_file = self.resultfile + '.res'
+        
+        
+        self.self_lock.acquire()
+        self.update = True
+        self.message = 'matching 0/%d done' %len(self.querryfiles)
+        self.self_lock.release()
+        
+        
+        if os.path.isfile(res_file) and not self.override:
+            with open(res_file, 'rb') as input:
+                self.result = pickle.load(input)
+        else:
+            self.result = {}
+        
+        
+        import cv2            
+        matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        
+        crosscheck = self.crosscheck
+        
+        #cleanup old results:
+        self.self_lock.acquire()
+        for i in self.result.keys():
+            found = False
+            for j in querryfingerprints:
+                if i == j[0]:
+                    found = True
+                    break
+            if not found:
+                self.result.pop(i)
+        self.self_lock.release()
+
+        gc.collect()
+        
+        #compute the new results
+        for e,i in enumerate(querryfingerprints):
+            self.self_lock.acquire()
+            if not self.result.has_key(i[0]):
+                self.result[i[0]] = []
+                #we can release the lock early
+                self.self_lock.release() 
+                compute = np.ones(len(sourcefingerprints))
+                outlist = sorted(sourcefingerprints, key=lambda x: x[0])
+            else:
+                compute = np.ones(len(sourcefingerprints))
+                outlist = sorted(sourcefingerprints, key=lambda x: x[0])
+                reslist = sorted([l[0] for l in self.result[i[0]]])
+                #we release the lock after we know what needs to be computed
+                self.self_lock.release() 
+                offset = 0
+                for k,l in enumerate(outlist):
+                    if k-offset >= len(reslist)-1:
+                        break
+                    check = sorted([l[0],reslist[k-offset]])
+                    while l[0] != reslist[k-offset] and check[0] != l[0]:
+                        for en,t in enumerate(self.result[i[0]]):
+                            if t[0] == check[0]:
+                                self.result[i[0]].pop(en)
+                                break
+                        offset = offset - 1
+                        if np.abs(k-offset) >= len(reslist)-1:
+                            break
+                        check = sorted([l[0],reslist[k-offset]])
+                    if l[0] == reslist[k-offset]:
+                        compute[k] = 0
+                    else:
+                        offset = offset + 1
+                self.self_lock.acquire()
+                for l in reslist[k-offset:]:
+                    for en,t in enumerate(self.result[i[0]]):
+                        if t[0] == check[0]:
+                            self.result[i[0]].pop(en)
+                            break
+                #we release the lock after we removed the expired results
+                self.self_lock.release()
+            save = False
+            for k,j in enumerate(outlist): 
+                if compute[k]:
+                    if self.pmode:
+                        res = compare_pictures(i[1],j[1],orb_matcher=matcher)
+                    else:
+                        res = compare_clips(i[1],j[1],orb_matcher=matcher)
+                    if crosscheck:
+                        if self.pmode:
+                            revres = compare_pictures(j[1],i[1],orb_matcher=matcher)
+                        else:
+                            revres = compare_clips(j[1],i[1],orb_matcher=matcher)
+                        self.self_lock.acquire()
+                        self.result[i[0]].append((j[0],res,revres))
+                        self.self_lock.release()
+                    else:
+                        self.self_lock.acquire()
+                        self.result[i[0]].append((j[0],res))
+                        self.self_lock.release()
+                    save = True
+                    
+            if save and self.override:
+                with open(res_file, 'wb') as output:
+                    pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+
+            self.self_lock.acquire()
+            self.update = True
+            self.message = 'matching %d/%d done' %(e+1,len(self.querryfiles))
+            if self.abort:
+                with open(res_file, 'wb') as output:
+                    pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+                self.message = 'matching %d/%d done - aborted' %(e+1,len(self.querryfiles))
+                self.abort = False
+                self.self_lock.release()
+                return            
+            self.self_lock.release()
+                
+        with open(res_file, 'wb') as output:    
+            pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+        
+        return
