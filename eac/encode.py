@@ -4,7 +4,7 @@ import tempfile
 import threading
 import pickle
 
-vformats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg','.MP4')
+vformats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg','.MP4','.3gp')
 pformats = ('.png', '.jpg', '.jpeg','.tiff','.bmp','.JPG','.JPEG')
 
 def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',processes=1,audio='mp4',override=False,options=None):

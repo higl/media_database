@@ -1714,7 +1714,7 @@ class CompareWindow(tk.Toplevel):
                 res_file = str(hash(self.inp) + hash(self.outp))
                 self.result = {}
                 self.thread = eacc.compare_thread(
-                                self.infiles,self.outp,
+                                self.infiles,self.outfiles,
                                 self.result,res_file,
                                 **kwargs
                                 )

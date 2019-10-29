@@ -525,7 +525,7 @@ def get_descriptor(file,fps=3,nsec=180,proc=1,quality='320x640',override=False,p
             descriptor = pickle.load(input)
     else:
         if pmode:
-            files = encode.findFiles(file,formats=eace.pformats,single_level=True)
+            files = encode.findFiles(file,formats=encode.pformats,single_level=True)
             files = sorted(files)
             descriptor = get_picture_descriptor(files,quality=quality)
         else:
