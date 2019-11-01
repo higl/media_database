@@ -1,6 +1,6 @@
 *.ipynb_checkpoints/*
+*.ipynb
 *.pyc
-
 *.pkl
 *.picres
 *.res
