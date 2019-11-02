@@ -362,6 +362,12 @@ class media_database:
         
 class media_database_sql:
     """
+        \\always commit write operations before the cursor is closed!
+        \\always close cursors at end of function 
+        
+        \\TODO for now the different attributes are hardcoded, in 
+        \\order to easily add more attributes it might be worth 
+        \\to make the attribute tables somewhat more flexible in the future
         a media_database stores, media_entries. 
         It can save and load it from disk, 
         search through it and provide information
@@ -369,70 +375,296 @@ class media_database_sql:
     """
     import os
     import pickle
-    #//TODO convert strings into raw strings
-    #//TODO make dlist a numpy array and then use the masking function for the reduced "unplayed" list in get_random_entry
+    import sqlite3    
     
-    
-    def __init__(self,d,p_style = 'first',v_style = 'random',m_style = 'random',e_style = 'first',force_update=False):
-        """
-            \TODO this needs to be reimplemented for sql
+    def __init__(self,d,parent,p_style = 'first',v_style = 'random',m_style = 'random',e_style = 'first',force_update=False,legacy_load=False):
+        """ Initialize a database connection. Create the database first if no other file is given.        
         """       
-        self.parent = d
-        self.hash = hash(d)
         
-        cwd = os.getcwd()        
-        for i in os.listdir(cwd):
-            if os.path.split(i)[1] == str(self.hash)+'.pkl':
-                self._load_(i)
-                if os.path.getmtime(d) > self.mtime or force_update:
-                    self.update(d)
-                return
+        if os.path.isfile(d):
+            self.connection = sqlite3.connect(d)
+            if not self._check_db_(self.connection):
+                raise Exception("""
+                the database is not consistent with the current code version!
+                maybe you are trying to connect to an older version, where no
+                conversion method has been implemented or you are connecting to
+                a database that is not a media database at all.
+                """)
+        else:
+            self.connection = self._create_db_(d)
+            self.fill()
+        self.parent = os.path.normpath(parent)
         
-        self.p_style = p_style
-        self.v_style = v_style
-        self.m_style = m_style
-        self.e_style = e_style
-        self.dlist = []
-        self.alist = {}
-        self.fill(d)
-        self.mtime = time()
-        self.saved = False
+        if os.path.getmtime(parent) > os.path.getmtime(d) or force_update:
+            self.update()
         return
+        
+        if legacy_load:
+            self.hash = hash(parent)
+            cwd = os.getcwd()        
+            for i in os.listdir(cwd):
+                if os.path.split(i)[1] == str(self.hash)+'.pkl':
+                    self._convert_pkl_to_sqlite_(i,self.connection)
+                    break
+        return
+        
+    def _create_db_(self,d):
+        """
+            setup a media database and return the connector to it
+        """
+        connection = sqlite3.connect(d)
+        
+        c = connection.cursor()
+        # The main table:
+        c.execute('''CREATE TABLE MediaEntries
+            (mediaID integer primary key,
+             path text, 
+             type text, 
+             style integer, 
+             played integer)
+            ''')
+        c.execute('''CREATE UNIQUE INDEX path
+            ON MediaEntries(path);
+            ''')          
+                  
+        # Tables for each media type. For now this is kind of unnecessary
+        # since we only join attributes down the lines. We even use the MediaEntries
+        # table as our foreign key reference, 
+        # but in the future single media types might have distinctive columns
+        # (e.g. last_opened_id in Picture/Music entries) 
+        
+        
+        # We use foreign keys here. From sqlite.org:
+        # "Attempting to insert a row into the track table 
+        # that does not correspond to any row in the artist 
+        # table will fail, as will attempting to delete a row 
+        # from the artist table when there exist dependent 
+        # rows in the track table There is one exception: 
+        # if the foreign key column in the track table is NULL, 
+        # then no corresponding entry in the artist table is required."
+        c.execute('''CREATE TABLE VideoEntries
+            (mediaID integer, 
+             actorMediaID integer, 
+             tagMediaID integer, 
+             genreMediaID integer,
+             FOREIGN KEY(mediaID) REFERENCES MediaEntries(mediaID))
+            ''')
+        c.execute('''CREATE TABLE MusicEntries
+            (mediaID integer, 
+             artistMediaID integer, 
+             tagMediaID integer, 
+             genreMediaID integer,
+             FOREIGN KEY(mediaID) REFERENCES MediaEntries(mediaID))
+            ''')
+        c.execute('''CREATE TABLE PictureEntries
+            (mediaID integer, 
+             tagMediaID integer,
+             FOREIGN KEY(mediaID) REFERENCES MediaEntries(mediaID))
+            ''')
+        c.execute('''CREATE TABLE ExecutableEntries
+            (mediaID integer, 
+             tagMediaID integer,
+             FOREIGN KEY(mediaID) REFERENCES MediaEntries(mediaID))
+            ''')
+        
+        # Tables and Indizes for each attribute
+        c.execute('''CREATE TABLE Actor
+            (actorID integer primary key, 
+             name text)
+            ''')
+        c.execute('''CREATE UNIQUE INDEX actorName
+            ON Actor(name);
+            ''')          
+        c.execute('''CREATE TABLE Artist
+            (artistID integer primary key, 
+             name text)
+            ''')
+        c.execute('''CREATE UNIQUE INDEX artistName
+            ON Artist(name);
+            ''')          
+        c.execute('''CREATE TABLE Tag
+            (tagID integer primary key, 
+             name text)
+            ''')
+        c.execute('''CREATE UNIQUE INDEX tagName
+            ON Tag(name);
+            ''')          
+        c.execute('''CREATE TABLE Genre
+            (genreID integer primary key, 
+             name text)
+            ''')
+        c.execute('''CREATE UNIQUE INDEX genreName
+            ON Genre(name);
+            ''')          
+                  
+        # Join Tables
+        c.execute('''CREATE TABLE GenreMedia
+            (genreMediaID integer, 
+             genreID integer,
+             FOREIGN KEY(genreMediaID) REFERENCES MediaEntries(mediaID),
+             FOREIGN KEY(genreID) REFERENCES Genre(genreID))
+            ''')
+        c.execute('''CREATE TABLE ActorMedia
+            (actorMediaID integer, 
+             actorID integer,
+             FOREIGN KEY(genreMediaID) REFERENCES MediaEntries(mediaID),
+             FOREIGN KEY(actorID) REFERENCES Actor(actorID))
+            ''')
+        c.execute('''CREATE TABLE ArtistMedia
+            (artistMediaID integer, 
+             artistID integer,
+             FOREIGN KEY(genreMediaID) REFERENCES MediaEntries(mediaID),
+             FOREIGN KEY(artistID) REFERENCES Artist(artistID))
+            ''')
+        c.execute('''CREATE TABLE TagMedia
+            (tagMediaID integer, 
+             tagID integer,
+             FOREIGN KEY(genreMediaID) REFERENCES MediaEntries(mediaID),
+             FOREIGN KEY(tagID) REFERENCES Tag(tagID))
+            ''')
+                  
+        connection.commit()
+        c.close()
+        
+        return connection
     
-    def _load_(self,d):
+    def _check_db_(self,conn):
         """
-            \TODO this needs to be reimplemented for sql
-            load a media database from filepath d
-            \\TODO introduce versioning here
+            check if the given database connection contains
+            all the tables we need 
         """
+        tablelist = [
+                    'MediaEntries',
+                    'VideoEntries',
+                    'PictureEntries',
+                    'MusicEntries',
+                    'ExecutableEntriesEntries',
+                    'Actor',
+                    'Artist',
+                    'Tag',
+                    'Genre',
+                    'GenreMedia',
+                    'TagMedia',
+                    'ActorMedia',
+                    'ArtistMedia',
+                    ]
+        curs = conn.cursor()
+        checks = [self._table_exists_(curs,t) for t in tablelist]
+        curs.close()
+        return all(checks)
+        
+    def _table_exists_(self,curs,name):
+        """
+            check if a table with name 'name' exists and return True
+            if not, return False
+        """
+        curs.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name=?;""",
+                name)
+        
+        return not curs.fetchone() == None
+        
+    def _convert_pkl_to_sqlite_(self,d,conn):
+        """
+            load a media database from filepath d in pickle format
+            and add the data to the database we are connected to
+        """
+        
         with open(d, 'rb') as input:
             db = pickle.load(input)
-            self.dlist = db['dlist']
-            self.alist = db['alist']
-            self.p_style = db['pstyle']
-            self.m_style = db['mstyle']
-            self.v_style = db['vstyle']
-            self.e_style = db['estyle']
-            self.mtime = db['mtime']
-        self.saved = True
-            
-    def save(self):
+            dlist = db['dlist']
+            alist = db['alist']
+            p_style = db['pstyle']
+            m_style = db['mstyle']
+            v_style = db['vstyle']
+            e_style = db['estyle']
+            mtime = db['mtime']
+
+    def add_entry(self,new_entry,*args,**kwargs):
         """
             \TODO this needs to be reimplemented for sql
-            save the media database to disk via pickle
-            uses its own hash as the filename
+            This function adds an media_entry to the database.
+            
+            It throws an error if a media entry with the same path 
+            already exists. Therefore we need to make sure that this
+            function is only called for new entries. 
+            Call update_entry for existing entries instead. 
         """
-        self.saved = True
-        out = {}
-        out['dlist']=self.dlist
-        out['alist']=self.alist
-        out['pstyle']=self.p_style
-        out['vstyle']=self.v_style
-        out['mstyle']=self.m_style
-        out['estyle']=self.e_style
-        out['mtime']=self.mtime
-        with open(str(self.hash)+'.pkl', 'wb') as output:
-            pickle.dump(out, output, pickle.HIGHEST_PROTOCOL)
+        # the new logic requires that path is a relative path on top of parent
+        # \\TODO this needs to be enforced in the rest of the code as well!
+        path = new_entry.path
+        typ = new_entry.type
+        style = new_entry.style
+        played = int(new_entry.played)
+        attribs = new_entry.attribs
+        
+        #supported attribs gives the Attrib table 
+        #and the corresponding Joining table
+        supported_attribs = {'actors': ['Actor','ActorMedia'],
+                             'artist': ['Artist','ArtistMedia'],
+                             'genre': ['Genre','GenreMedia'],
+                             'tags': ['Tag','TagMedia']
+                             }
+        #supported types gives the Type table
+        #and the corresponding number of common attrib columns
+        supported_types = {'exec': ['ExecutableEntries',1],
+                           'video': ['VideoEntries',3],
+                           'music': ['MusicEntries',2],
+                           'picture': ['PictureEntries',1]
+                           }
+        
+        if typ not in supported_types:
+            raise NotImplementedError
+        if any([k not in supported_attribs for k in attribs.keys()]):
+            raise NotImplementedError
+        
+        curs = self.connection.cursor()
+        # create the entry in the main MediaEntryDB:
+        curs.execute("""INSERT INTO MediaEntries VALUES 
+                      (null,?,?,?,?)""",
+                      (path,typ,style,played))
+        
+        mediaid = curs.lastrowid
+        
+        # create the entry in the type DB
+        querry = "INSERT INTO {} VALUES (?".format(supported_types[typ][0])
+        querry = querry + ',?' * supported_types[typ][1] + ')'
+        params = [mediaid]*(supported_types[typ][1]+1) 
+        curs.execute(querry,params)
+        
+        for a in attribs:
+            for e in attribs[a]:
+                # create the entry in the Attribute DB,
+                # \\TODO once we update to python3 we should 
+                # \\change this querry to the INSERT ... ON CONFLICT DO ... 
+                # \\syntax 
+                querry = "INSERT INTO {} VALUES (null,?)".format(supported_attribs[a][0])
+                print e
+                try:
+                    curs.execute(querry,[e])
+                    attribID = curs.lastrowid
+                except sqlite3.IntegrityError:
+                    querry = "SELECT ROWID FROM {} WHERE name=?".format(supported_attribs[a][0])
+                    params = e
+                    curs.execute(querry,[e])
+                    attribID = curs.fetchone()[0]
+                # create the entries in the corresponding JOIN Tables
+                querry = "INSERT INTO {} VALUES (?,?)".format(supported_attribs[a][1])
+                params = [mediaid,attribID] 
+                curs.execute(querry,params)
+        self.connection.commit()
+        curs.close()
+        return
+        
+    def delete_entry(self,entry):
+        """
+            \TODO this needs to be reimplemented for sql
+            remove a media entry from the database
+        """
+        return None
+        
+    def update_entry(self,entry):
             
     def get_random_entry(self,single=False,selection=None):
         """
@@ -473,7 +705,7 @@ class media_database_sql:
                     self.alist[a] = 1
                 else:
                     self.alist[a] = self.alist[a] + 1
-        saved = False
+        self.saved = False
     
     def update(self,d,ty='unknown'):
         """
@@ -534,9 +766,8 @@ class media_database_sql:
             res.append(new_entry)
         return res
         
-    def determine_media_type(self,i):
+    def determine_media_type(self,path):
         """
-            \TODO this needs to be reimplemented for sql
             This function takes a path as an input and then searches through all the files associated with that path (recursively!).
             Depending on the file extensions found, it will decide which type of media should be associated with that path.
             
@@ -544,8 +775,6 @@ class media_database_sql:
                 executable - video - music - picture 
                 
             if no media type is found it will return 'unknown'
-            
-            \\TODO redo with os.walk
         """
         accepted_video_formats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg')
         accepted_music_formats = ('.mp3', '.wma', '.flac','.ogg')
@@ -556,32 +785,16 @@ class media_database_sql:
         ex = False
         music = False
         
-        folderList = []
-        if os.path.isdir(i):
-            folderList = [i]
-        elif i.lower().endswith(accepted_picture_formats):
-            picture = True
-        elif i.lower().endswith(accepted_video_formats):
-            video = True
-        elif i.lower().endswith(accepted_music_formats):
-            music = True
-        elif i.lower().endswith(accepted_execs):
-            ex = True
-        while len(folderList)>0:
-            ls = os.listdir(folderList[0])
-            for i in ls:
-                p = folderList[0] + '/' + i
-                if os.path.isdir(p):
-                    folderList.append(p)
-                elif i.lower().endswith(accepted_picture_formats):
+        for root,folder,files in os.walk(path):
+            for f in files:
+                if f.lower().endswith(accepted_picture_formats):
                     picture = True
-                elif i.lower().endswith(accepted_video_formats):
+                elif f.lower().endswith(accepted_video_formats):
                     video = True
-                elif i.lower().endswith(accepted_music_formats):
+                elif f.lower().endswith(accepted_music_formats):
                     music = True
-                elif i.lower().endswith(accepted_execs):
+                elif f.lower().endswith(accepted_execs):
                     ex = True
-            folderList.pop(0)
 
         if ex:
             return 'exec'
@@ -593,24 +806,10 @@ class media_database_sql:
             return 'picture'
         else:
             return 'unknown'
+        
     
         
-    def add_entry(self,new_entry,*args,**kwargs):
-        """
-            \TODO this needs to be reimplemented for sql
-            This function adds an media_entry to the database.
-            
-            It first determines the appropriate media type and creates the media_entry 
-            if also checks if the same entry already exists. In that case the new media_entry is not added. 
-        """
-        return None
-        
-    def delete_entry(self,entry):
-        """
-            \TODO this needs to be reimplemented for sql
-            remove a media entry from the database
-        """
-        return None
+
         
     def change_style(self):
         """

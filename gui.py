@@ -1,5 +1,5 @@
 import Tkinter as tk
-import tkMessageBox
+import tkMessageBox, tkFileDialog
 import media_database as mdb
 import media_entry as me
 import threading
@@ -82,14 +82,26 @@ class Application(tk.Tk):
         #self.linkButton = tk.Button(self, text='Link')
         #self.linkButton.grid(row=toolr+3,column=toolc+0,**options)
         self.forceUpdate = tk.IntVar()
-        self.forceBox = tk.Checkbutton(self,text='force update',variable=self.forceUpdate)
+        self.forceBox = tk.Checkbutton(self,
+                                       text='force update',
+                                       variable=self.forceUpdate)
         self.forceBox.grid(row=toolr+3,column=toolc+0,**options)
+        self.loadExternal = tk.IntVar()
+        self.loadExternalBox = tk.Checkbutton(self,
+                                              text='load external',
+                                              variable=self.loadExternal)
+        self.loadExternalBox.grid(row=toolr+4,column=toolc+0,**options)
+        self.legacyLoad = tk.IntVar()
+        self.legacyLoadBox = tk.Checkbutton(self,
+                                              text='legacy load',
+                                              variable=self.legacyLoad)
+        self.legacyLoadBox.grid(row=toolr+5,column=toolc+0,**options)
         self.singleMode = tk.IntVar()
         self.singleBox = tk.Checkbutton(self,text='single',variable=self.singleMode)
-        self.singleBox.grid(row=toolr+4,column=toolc+0,**options)
+        self.singleBox.grid(row=toolr+6,column=toolc+0,**options)
         self.selectionMode = tk.IntVar()
         self.selectionBox = tk.Checkbutton(self,text='selected',variable=self.selectionMode)
-        self.selectionBox.grid(row=toolr+5,column=toolc+0,**options)
+        self.selectionBox.grid(row=toolr+7,column=toolc+0,**options)
         
         dbr = 1
         dbc = 0
@@ -134,13 +146,30 @@ class Application(tk.Tk):
         """
             load a database
         """
-        self.dataBase.insert(tk.END,self.filepath.get())
-        if self.media_database != None and not self.media_database.saved:
-            msg = "Current database is not saved yet! \n Do you want to save before loading a new one?"
-            if tkMessageBox.askyesno("Load", msg):
-                self.media_database.save()
-                
-        self.media_database = mdb.media_database(self.filepath.get(),force_update=self.forceUpdate.get())
+        path = self.filepath.get()
+        
+        if os.path.isfile(path):
+            msg = "Select the parent directory of this database."
+            parent = tkFileDialog.askdirectory(title=msg,initialdir= "./")
+        elif os.path.isdir(path):
+            if self.loadExternal.get():
+                msg = 'Select the database.'
+                parent = path
+                path = tkFileDialog.askfile(title = msg,initialdir= "./")
+            else:
+                parent = path
+                path = os.path.join(path,'mediaDB.db')
+        
+        # legacy load will convert an old pickle file into the given database. 
+        # if the given database already agrees with the expected database structure
+        # then legacy load will try to extend the given database with the data from
+        # the pickle file
+        self.media_database = mdb.media_database(path,
+                                                 parent,
+                                                 force_update=self.forceUpdate.get(),
+                                                 legacy_load=self.legacyLoad.get()
+                                                )
+        
         self.dataBase.delete(0,tk.END)
         self.selectionList = self.media_database.get_selection()
         for i in self.selectionList:
@@ -151,7 +180,6 @@ class Application(tk.Tk):
         """
             save the database
         """
-        self.media_database.save()
         
     def linkFile(self,event):
         id = self.dataBase.get(tk.ACTIVE)
@@ -306,7 +334,6 @@ class Application(tk.Tk):
             if s == 'normal':
                 pass 
             elif s == 'update':
-                self.media_database.saved = False
                 self.infoWindow.status = 'normal'
             elif s == 'deleted':
                 self.history.remove(self.infoWindow.entry)
@@ -330,17 +357,8 @@ class Application(tk.Tk):
     def onClose(self):
         """
             clean up before closing the app. 
-            Warn if the database has been changed and not yet saved.
         """
-        if self.media_database != None and not self.media_database.saved:
-            msg = "Current database is not saved. \n Do you want to save before closing?"    
-            if tkMessageBox.askyesno("Exit", msg):
-                self.media_database.save()
-                self.destroy()
-            else:
-                self.destroy()
-        else:
-            self.destroy()
+        self.destroy()
     
 class SelectorFrame(tk.Frame):
     """
