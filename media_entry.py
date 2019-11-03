@@ -231,6 +231,7 @@ class video_entry(media_entry):
     """
         a media entry containing video files
     """
+    import cv2
     accepted_video_formats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg','.MP4')
         
     def __init__(self,path, tags=[], actors=[], genre='unknown',style='first'):
@@ -238,7 +239,12 @@ class video_entry(media_entry):
         self.attrib['tags'] = tags
         self.attrib['actors'] = actors
         self.attrib['genre'] = [genre]
-    
+        length = 0.0
+        for f in self.filepath:
+            v=cv2.VideoCapture(f)
+            v.set(cv2.CAP_PROP_POS_AVI_RATIO,1)
+            length = length + v.get(cv2.CAP_PROP_POS_MSEC)
+        self.attrib['length'] = length / 1000.0
     
 class music_entry(media_entry):
     """
@@ -251,6 +257,7 @@ class music_entry(media_entry):
         self.attrib['tags'] = tags
         self.attrib['artist'] = artist
         self.attrib['genre'] = genre
+        self.attrib['ntacks'] = len(self.filepath)
         
     
 class picture_entry(media_entry):
@@ -262,6 +269,7 @@ class picture_entry(media_entry):
     def __init__(self,path, tags=[],style='first'):
         media_entry.__init__(self,path,type='picture',format=self.accepted_picture_formats)
         self.attrib['tags'] = tags
+        self.attrib['npics'] = len(self.filepath)
     
     
 class executable_entry(media_entry):

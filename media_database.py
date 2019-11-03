@@ -383,6 +383,8 @@ class media_database_sql:
         
         if os.path.isfile(d):
             self.connection = sqlite3.connect(d)
+            self.connection.execute("PRAGMA foreign_keys = 1")
+
             if not self._check_db_(self.connection):
                 raise Exception("""
                 the database is not consistent with the current code version!
@@ -413,7 +415,8 @@ class media_database_sql:
             setup a media database and return the connector to it
         """
         connection = sqlite3.connect(d)
-        
+        connection.execute("PRAGMA foreign_keys = 1")        
+
         c = connection.cursor()
         # The main table:
         c.execute('''CREATE TABLE MediaEntries
@@ -427,9 +430,11 @@ class media_database_sql:
             ON MediaEntries(path);
             ''')          
                   
-        # Tables for each media type. For now this is kind of unnecessary
-        # since we only join attributes down the lines. We even use the MediaEntries
-        # table as our foreign key reference, 
+        # Tables for each media type. We even use the MediaEntries
+        # table as our foreign key reference, which is then copied in the
+        # columns of common attributes
+        # specific type attributes for now need to 
+        # come after the common attributes
         # but in the future single media types might have distinctive columns
         # (e.g. last_opened_id in Picture/Music entries) 
         
@@ -447,6 +452,7 @@ class media_database_sql:
              actorMediaID integer, 
              tagMediaID integer, 
              genreMediaID integer,
+             length real,
              FOREIGN KEY(mediaID) REFERENCES MediaEntries(mediaID))
             ''')
         c.execute('''CREATE TABLE MusicEntries
@@ -454,11 +460,13 @@ class media_database_sql:
              artistMediaID integer, 
              tagMediaID integer, 
              genreMediaID integer,
+             ntracks integer,
              FOREIGN KEY(mediaID) REFERENCES MediaEntries(mediaID))
             ''')
         c.execute('''CREATE TABLE PictureEntries
             (mediaID integer, 
              tagMediaID integer,
+             npics integer,
              FOREIGN KEY(mediaID) REFERENCES MediaEntries(mediaID))
             ''')
         c.execute('''CREATE TABLE ExecutableEntries
@@ -507,19 +515,19 @@ class media_database_sql:
         c.execute('''CREATE TABLE ActorMedia
             (actorMediaID integer, 
              actorID integer,
-             FOREIGN KEY(genreMediaID) REFERENCES MediaEntries(mediaID),
+             FOREIGN KEY(actorMediaID) REFERENCES MediaEntries(mediaID),
              FOREIGN KEY(actorID) REFERENCES Actor(actorID))
             ''')
         c.execute('''CREATE TABLE ArtistMedia
             (artistMediaID integer, 
              artistID integer,
-             FOREIGN KEY(genreMediaID) REFERENCES MediaEntries(mediaID),
+             FOREIGN KEY(artistMediaID) REFERENCES MediaEntries(mediaID),
              FOREIGN KEY(artistID) REFERENCES Artist(artistID))
             ''')
         c.execute('''CREATE TABLE TagMedia
             (tagMediaID integer, 
              tagID integer,
-             FOREIGN KEY(genreMediaID) REFERENCES MediaEntries(mediaID),
+             FOREIGN KEY(tagMediaID) REFERENCES MediaEntries(mediaID),
              FOREIGN KEY(tagID) REFERENCES Tag(tagID))
             ''')
                   
@@ -583,13 +591,14 @@ class media_database_sql:
 
     def add_entry(self,new_entry,*args,**kwargs):
         """
-            \TODO this needs to be reimplemented for sql
             This function adds an media_entry to the database.
             
-            It throws an error if a media entry with the same path 
-            already exists. Therefore we need to make sure that this
-            function is only called for new entries. 
-            Call update_entry for existing entries instead. 
+            If a media entry with the same path 
+            already exists, nothing happens, i.e. we assume 
+            that the current entry in the db is favoured over 
+            the external new entry.  
+            If the existing entry should be overwritten by 
+            the external entry, then update_entry should be used.  
         """
         # the new logic requires that path is a relative path on top of parent
         # \\TODO this needs to be enforced in the rest of the code as well!
@@ -601,56 +610,72 @@ class media_database_sql:
         
         #supported attribs gives the Attrib table 
         #and the corresponding Joining table
-        supported_attribs = {'actors': ['Actor','ActorMedia'],
-                             'artist': ['Artist','ArtistMedia'],
-                             'genre': ['Genre','GenreMedia'],
-                             'tags': ['Tag','TagMedia']
-                             }
+        supported_attribs = {
+                    'actors': ['Actor','ActorMedia'],
+                    'artist': ['Artist','ArtistMedia'],
+                    'genre': ['Genre','GenreMedia'],
+                    'tags': ['Tag','TagMedia'],
+                    'ntracks': [] ,
+                    'npics': [],
+                    'length': [],
+                    }
+                    
         #supported types gives the Type table
         #and the corresponding number of common attrib columns
-        supported_types = {'exec': ['ExecutableEntries',1],
-                           'video': ['VideoEntries',3],
-                           'music': ['MusicEntries',2],
-                           'picture': ['PictureEntries',1]
-                           }
+        #and the corresponding specific attrib columns
+        supported_types = {
+                    'exec': ['ExecutableEntries',1,[]],
+                    'video': ['VideoEntries',3,['length']],
+                    'music': ['MusicEntries',2,['ntracks']],
+                    'picture': ['PictureEntries',1,['npics']]
+                    }
         
         if typ not in supported_types:
             raise NotImplementedError
-        if any([k not in supported_attribs for k in attribs.keys()]):
+        if any([k not in supported_attribs for k in attribs]):
             raise NotImplementedError
         
         curs = self.connection.cursor()
         # create the entry in the main MediaEntryDB:
-        curs.execute("""INSERT INTO MediaEntries VALUES 
+        try:
+            curs.execute("""INSERT INTO MediaEntries VALUES 
                       (null,?,?,?,?)""",
                       (path,typ,style,played))
+        except sqlite3.IntegrityError:
+            return
         
         mediaid = curs.lastrowid
         
         # create the entry in the type DB
         querry = "INSERT INTO {} VALUES (?".format(supported_types[typ][0])
-        querry = querry + ',?' * supported_types[typ][1] + ')'
-        params = [mediaid]*(supported_types[typ][1]+1) 
+        querry = querry + ',?' * supported_types[typ][1] 
+        querry = querry + ',?' * len(supported_types[typ][2])
+        querry = querry + ');'
+        params = [mediaid]*(supported_types[typ][1]+1)
+        for a in supported_types[typ][2]:
+            params.append(attribs[a])
+        
         curs.execute(querry,params)
         
         for a in attribs:
+            if len(supported_attribs[a]) != 2:
+                continue
             for e in attribs[a]:
                 # create the entry in the Attribute DB,
                 # \\TODO once we update to python3 we should 
                 # \\change this querry to the INSERT ... ON CONFLICT DO ... 
                 # \\syntax 
-                querry = "INSERT INTO {} VALUES (null,?)".format(supported_attribs[a][0])
-                print e
+                querry = "INSERT INTO {} VALUES (null,?) ;".format(supported_attribs[a][0])
                 try:
                     curs.execute(querry,[e])
                     attribID = curs.lastrowid
                 except sqlite3.IntegrityError:
-                    querry = "SELECT ROWID FROM {} WHERE name=?".format(supported_attribs[a][0])
+                    querry = "SELECT ROWID FROM {} WHERE name=? ;".format(supported_attribs[a][0])
                     params = e
                     curs.execute(querry,[e])
                     attribID = curs.fetchone()[0]
                 # create the entries in the corresponding JOIN Tables
-                querry = "INSERT INTO {} VALUES (?,?)".format(supported_attribs[a][1])
+                querry = "INSERT INTO {} VALUES (?,?) ;".format(supported_attribs[a][1])
                 params = [mediaid,attribID] 
                 curs.execute(querry,params)
         self.connection.commit()
@@ -659,10 +684,84 @@ class media_database_sql:
         
     def delete_entry(self,entry):
         """
-            \TODO this needs to be reimplemented for sql
             remove a media entry from the database
         """
-        return None
+        
+        supported_types = {
+                   'exec': ['ExecutableEntries'],
+                   'video': ['VideoEntries'],
+                   'music': ['MusicEntries'],
+                   'picture': ['PictureEntries'],
+                   }
+        
+        join_tables = [
+                ['GenreMedia','genreMediaID'],
+                ['ActorMedia','actorMediaID'],
+                ['ArtistMedia','artistMediaID'],
+                ['TagMedia','tagMediaID'],
+                ]
+        
+        curs = self.connection.cursor()
+        #we use foreign keys to keep the tables consistend 
+        #therefore we need to delete entries bottom up, starting with
+        #the attrib join tables
+        
+        #get the identifier ID:
+        querry = "SELECT ROWID FROM MediaEntries WHERE path = ? ;"
+        path = [entry.path]
+        curs.execute(querry,path)
+        mediaID = curs.fetchone()[0]
+        
+        #delete entries from join_tables
+        for t in join_tables:
+            querry = "DELETE FROM {} WHERE {} = ? ;".format(t[0],t[1])
+            curs.execute(querry,mediaID)
+        
+        #delete entry from media type db:
+        table = supported_types[entry.type][0]
+        querry = "DELETE FROM {} WHERE mediaID = ? ;".format(table)
+        curs.execute(querry,mediaID)
+        
+        #finially we can delete the entry from the main db:
+        querry = "DELETE FROM MediaEntries WHERE mediaID = ? ;"
+        curs.execute(querry,mediaID)
+        
+        self.connection.commit()
+        curs.close()
+        return
+    
+    def clean_attrib_dbs(self):
+        """
+            remove entries in the attribute tables that are not used by any
+            of the media entries
+            - this might get very slow depending on the amount of attributes in the 
+            various tables 
+        """
+        attrib_tables = [
+                    'Actor',
+                    'Artist',
+                    'Genre',
+                    'Tag',
+                    ]
+        
+        curs = self.connection.cursor()
+
+
+        for table in attrib_tables:
+            #get a list of all attributes in the table
+            querry = "SELECT name FROM {}".format(table)
+            curs.execute(querry)
+            
+            names = curs.fetchall()
+            for n in names:
+                querry = "DELETE FROM {} WHERE name = ?".format(table)
+                try:
+                    curs.execute(querry,n)
+                except sqlite3.IntegrityError:
+                    pass
+        self.connection.commit()
+        curs.close()
+        return
         
     def update_entry(self,entry):
             
