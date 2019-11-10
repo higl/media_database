@@ -600,9 +600,14 @@ class media_database_sql:
             If the existing entry should be overwritten by 
             the external entry, then update_entry should be used.  
         """
-        # the new logic requires that path is a relative path on top of parent
-        # \\TODO this needs to be enforced in the rest of the code as well!
-        path = new_entry.path
+        path = new_entry.get_display_string()
+        if not os.path.exists(os.path.join(self.parent,path)):
+            print """
+                    ERROR: media database currently 
+                    only supports media entries that are
+                    located within 0.th level of the parent directory
+                  """
+            raise NotImplementedError
         typ = new_entry.type
         style = new_entry.style
         played = int(new_entry.played)
@@ -708,7 +713,7 @@ class media_database_sql:
         
         #get the identifier ID:
         querry = "SELECT ROWID FROM MediaEntries WHERE path = ? ;"
-        path = [entry.path]
+        path = [entry.get_display_string()]
         curs.execute(querry,path)
         mediaID = curs.fetchone()[0]
         
@@ -763,34 +768,281 @@ class media_database_sql:
         curs.close()
         return
         
-    def update_entry(self,entry):
+    def update_entry(self,entry,update_attrib=False):
+        """
+            This function updates a media_entry in the database.
+        """
+        path = new_entry.get_display_string()
+        if not os.path.exists(os.path.join(self.parent,path)):
+            print """
+                    ERROR: media database currently 
+                    only supports media entries that are
+                    located within 0.th level of the parent directory
+                  """
+            raise NotImplementedError
+        typ = entry.type
+        style = entry.style
+        played = int(entry.played)
+        attribs = entry.attribs
+        
+        #supported attribs gives the Attrib table 
+        #and the corresponding Joining table
+        supported_attribs = {
+                    'actors': ['Actor','ActorMedia'],
+                    'artist': ['Artist','ArtistMedia'],
+                    'genre': ['Genre','GenreMedia'],
+                    'tags': ['Tag','TagMedia'],
+                    'ntracks': [] ,
+                    'npics': [],
+                    'length': [],
+                    }
+                    
+        #supported types gives the Type table
+        #and the corresponding number of common attrib columns
+        #and the corresponding specific attrib columns
+        supported_types = {
+                    'exec': ['ExecutableEntries',1,[]],
+                    'video': ['VideoEntries',3,['length']],
+                    'music': ['MusicEntries',2,['ntracks']],
+                    'picture': ['PictureEntries',1,['npics']]
+                    }
+        
+        if typ not in supported_types:
+            raise NotImplementedError
+        if any([k not in supported_attribs for k in attribs]):
+            raise NotImplementedError
+        
+        curs = self.connection.cursor()
+        # determine if the media type was changed
+        curs.execute("""SELECT type 
+                    FROM MediaEntries 
+                    WHERE
+                        path = ? ;""",
+                  (path))
+        otype = curs.fetchone()[0]
+        typechange = otype.__ne__(typ)
+
+        
+        # update the entry in the main MediaEntryDB:
+        curs.execute("""UPDATE MediaEntries 
+                    SET VALUES 
+                        type = ?,
+                        style = ?,
+                        played = ?
+                    WHERE
+                        path = ? ;""",
+                  (typ,style,played,path))
+        
+        mediaid = curs.lastrowid
+        
+        # delete old entries in the attrib join tables 
+        # if we change the type we also change the reference id in 
+        # the attrib tables therefore we also need to delete the 
+        # entries in the join tables     
+        if typechange or update_attrib:
+            for a in supported_attribs:
+                if len(a) != 2:
+                    continue
+                querry = """
+                            DELETE 
+                            FROM {} 
+                            WHERE mediaID = ? ;
+                        """.format(a[1])
+                params = [mediaid] 
+                curs.execute(querry,params)
+                
+        # update the entry in the type table, 
+        # if the type was changed, create a new entry
+        # and delete the old one in the respective tables
+        if typechange:
+            querry = """
+                        DELETE 
+                        FROM {} 
+                        WHERE mediaID = ? ;
+                     """.format(supported_types[otype][0])
+            params = mediaid
+            curs.execute(querry,params)
             
+            querry = """
+                        INSERT 
+                        INTO {} 
+                        VALUES (?
+                    """.format(supported_types[typ][0])
+            querry = querry + ',?' * supported_types[typ][1] 
+            querry = querry + ',?' * len(supported_types[typ][2])
+            querry = querry + ');'
+            params = [mediaid]*(supported_types[typ][1]+1)
+            for a in supported_types[typ][2]:
+                params.append(attribs[a])
+            curs.execute(querry,params)
+        
+        if typechange or update_attrib:
+            for a in attribs:
+                if len(supported_attribs[a]) != 2:
+                    continue
+                for e in attribs[a]:
+                    # create the entry in the Attribute DB,
+                    # \\TODO once we update to python3 we should 
+                    # \\change this querry to the INSERT ... ON CONFLICT DO ... 
+                    # \\syntax 
+                    querry = "INSERT INTO {} VALUES (null,?) ;".format(supported_attribs[a][0])
+                    try:
+                        curs.execute(querry,[e])
+                        attribID = curs.lastrowid
+                    except sqlite3.IntegrityError:
+                        querry = "SELECT ROWID FROM {} WHERE name=? ;".format(supported_attribs[a][0])
+                        params = e
+                        curs.execute(querry,[e])
+                        attribID = curs.fetchone()[0]
+                    # create the entries in the corresponding JOIN Tables
+                    querry = """
+                                INSERT 
+                                INTO {} 
+                                VALUES (?,?) ;
+                            """.format(supported_attribs[a][1])
+                    params = [mediaid,attribID] 
+                    curs.execute(querry,params)
+
+        self.connection.commit()
+        curs.close()
+        return    
+    
+    def create_media_entry_from_db(self,path):
+        """
+            this database acts as an intermediate layer between
+            the media_entry types that are used in the gui and 
+            the data saved on disk.
+            We therefore need to be able to use the database entries to 
+            create media_entries with the same information
+            
+            we will return the new media_entry instance
+        """
+        #we handle full paths as well as relative paths 
+        #on top of the parent directory here
+        #Be aware that the full path still needs to contain the parent path
+        #and is only allowed to go 1 level deeper
+        if os.path.exists(path):
+            split = os.path.split(path)
+            if split[0] == self.parent:
+                path = split[1]
+            else:
+                raise AttributeError('This path is not part of the database')
+        else:
+            join = os.path.join(self.parent,path)
+            if not os.path.exists(join):
+                raise AttributeError('This path is not part of the database')
+            
+        supported_types = {
+            'exec': [executable_entry,['tags']],
+            'video': [video_entry,['tags', 'actors', 'genre']],
+            'music': [music_entry,['tags', 'artist', 'genre']],
+            'picture': [picture_entry,['tags']]
+            }
+
+        supported_attribs = {
+                    'actors': ['Actor','ActorMedia','actorID','actorMediaID'],
+                    'artist': ['Artist','ArtistMedia','artistID','artistMediaID'],
+                    'genre': ['Genre','GenreMedia','genreID','genreMediaID'],
+                    'tags': ['Tag','TagMedia','tagID','tagMediaID'],
+                    }
+                    
+
+        curs = self.connection.cursor()
+        
+        #select the rows from the main table and set the 
+        #determined attributes
+        querry = """SELECT 
+                        type,
+                        style,
+                        played
+                    FROM MediaEntries
+                    WHERE path = ?"""
+        curs.execute(querry, [path])
+        res = curs.fetchone() #paths are unique!
+        typ = res[0]
+        style = res[1]
+        played = res[2]
+
+        #for now there is no need to select any data from the 
+        #type tables, because all quantities stored there, are 
+        #calculated while entry creation. In the future this might change
+        #which is why we give a template for those kind of selects here:
+        
+        #   querry=""" SELECT
+                      # *attribs*
+                      # FROM MediaEntries
+                        # INNER JOIN *typetabel* ON *typetable*.mediaID = MediaEntries.MediaID
+                      # WHERE path = ? ;
+                   # """.format([attribs,typetable])
+        
+        attribs = {}
+        for a in supported_types[typ][1]:
+            tables = supported_attribs[a]
+            querry = """SELECT 
+                            {}.name AS name
+                        FROM MediaEntries 
+                            INNER JOIN {} ON {}.{}ActorMedia.actorMediaID = MediaEntries.MediaID 
+                            INNER JOIN {} ON {}.{} = {}.{}ActorMedia.actorID = Actor.ActorID 
+                        WHERE path = ?
+                    """.format([
+                      tables[0],
+                      tables[1],
+                      tables[1],
+                      tables[3],
+                      tables[0],
+                      tables[1],
+                      tables[2],
+                      tables[0],
+                      tables[2],
+                    ])
+            print querry
+            curs.execute(querry,[path])
+            res = curs.fetchall()
+            attribs[a] = [i[0] for i in res]
+        
+        curs.close()
+        
+        creator = supported_types[typ][0]
+        path = os.path.join(self.parent,path)
+        
+        entry = creator(path,style=style,type=typ,played=played,**attribs)
+        return entry
+        
     def get_random_entry(self,single=False,selection=None):
         """
-            \TODO this needs to be reimplemented for sql
-            gives back a random entry.
+            gives back a random media entry instance, that is created from 
+            a random entry in the media table or, if given, from a random
+            element of a selection list.
 
             If single=True it will make sure that items are not repeated,
             until every item has been selected once before 
 
-            slection mode does not add to single mode
+            selection mode does not add to single mode
         """
         if selection != None:
-            return self.find_entry(random.choice(selection))
-        else: 
-            elist = self.dlist            
-            if single:
-                mask = [i.played for i in elist]
-                m = [i for (i,v) in zip(elist,mask) if not v]
-                if len(m) == 0:
-                    print('Congrats you\'ve seen it all')
-                    for i in elist:
-                        i.set_played(False)
-                    m = elist
-                return random.choice(m)
-            else:
-                return random.choice(elist)
+            return self.create_media_entry_from_db(random.choice(selection))
+        elif single:            
+            querry = """
+                        SELECT
+                            path
+                        FROM
+                            MediaEntries
+                        WHERE played = 0 ;
+                    """
+        else:
+            querry = """
+                        SELECT
+                            path
+                        FROM
+                            MediaEntries ;
+                    """
+        curs = self.connection.cursor()
+        curs.execute(querry)
+        selection = curs.fetchall()
+        curs.close()
         
+        return self.create_media_entry_from_db(random.choice(selection)[0])
+                
     
     def fill(self,d,ty='unknown'):
         """
@@ -845,7 +1097,7 @@ class media_database_sql:
         """
         res = []
         for i in os.listdir(d):
-            path = d + '/' + i 
+            path = os.path.join(d,i)
             if ty == 'unknown':
                 t = self.determine_media_type(path)
             else:

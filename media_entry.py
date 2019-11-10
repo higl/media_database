@@ -17,13 +17,12 @@ class media_entry:
     """ 
         A media entry stores information about a media file or
         a folder containing a certain type of media
-        //TODO move attributes to a dictionary ?
     """
-    def __init__(self,path, type='unknown',style='random',format=()):
-        self.path = path
+    def __init__(self,path, type='unknown',style='random', played=False, format=()):
+        self.path = path 
         self.type = type
         self.style = style
-        self.played = False
+        self.played = played
         self.accepted_format = format
         self.filepath = self._determine_files_(self.path,self.style,self.accepted_format)
         self.hash = hash(self.path)
@@ -77,7 +76,7 @@ class media_entry:
         elif style=='last':
             return [fileList[-1]]
         else:
-            return fileList
+            return sorted(fileList)
     
     def add_attrib(self,**kwargs):
         """
@@ -234,8 +233,19 @@ class video_entry(media_entry):
     import cv2
     accepted_video_formats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg','.MP4')
         
-    def __init__(self,path, tags=[], actors=[], genre='unknown',style='first'):
-        media_entry.__init__(self,path,type='video',format=self.accepted_video_formats)
+    def __init__(self,
+                path, 
+                tags=[], 
+                actors=[], 
+                genre='unknown',
+                style='first',
+                **kwargs):
+        media_entry.__init__(self,
+                            path,
+                            type='video',
+                            format=self.accepted_video_formats,
+                            style=style,
+                            **kwargs)
         self.attrib['tags'] = tags
         self.attrib['actors'] = actors
         self.attrib['genre'] = [genre]
@@ -252,8 +262,21 @@ class music_entry(media_entry):
     """
     accepted_music_formats = ('.mp3', '.wma', '.flac','.ogg')
     
-    def __init__(self,path, tags=[], artist=[], genre=['unknown'],style='random'):
-        media_entry.__init__(self,path,type='music',format=self.accepted_music_formats)
+    def __init__(self,
+                path, 
+                tags=[], 
+                artist=[], 
+                genre=['unknown'],
+                style='random',
+                **kwargs
+                ):
+        
+        media_entry.__init__(self,
+                            path,
+                            type='music',
+                            format=self.accepted_music_formats,
+                            style=style,
+                            **kwargs)
         self.attrib['tags'] = tags
         self.attrib['artist'] = artist
         self.attrib['genre'] = genre
@@ -266,8 +289,13 @@ class picture_entry(media_entry):
     """
     accepted_picture_formats = ('.png', '.jpg', '.jpeg','.tiff','.bmp','.JPG','.JPEG')   
     
-    def __init__(self,path, tags=[],style='first'):
-        media_entry.__init__(self,path,type='picture',format=self.accepted_picture_formats)
+    def __init__(self,path, tags=[],style='first',**kwargs):
+        media_entry.__init__(self,
+                            path,
+                            type='picture',
+                            format=self.accepted_picture_formats,
+                            style=style,
+                            **kwargs)
         self.attrib['tags'] = tags
         self.attrib['npics'] = len(self.filepath)
     
@@ -278,6 +306,11 @@ class executable_entry(media_entry):
     """
     accepted_exe_formats = ('.exe','.jar')
     
-    def __init__(self,path, tags=[],style='first'):
-        media_entry.__init__(self,path,type='exec',format=self.accepted_exe_formats)
+    def __init__(self,path, tags=[],style='first',**kwargs):
+        media_entry.__init__(self,
+                            path,
+                            type='exec',
+                            format=self.accepted_exe_formats,
+                            style=style,
+                            **kwargs)
         self.attrib['tags'] = tags
