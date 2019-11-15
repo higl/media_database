@@ -588,8 +588,12 @@ class media_database_sql:
             v_style = db['vstyle']
             e_style = db['estyle']
             mtime = db['mtime']
+        
+        self.add_entries(dlist)
+        return
+            
 
-    def add_entry(self,new_entry,*args,**kwargs):
+    def add_entry(self,new_entry,cursor=None,*args,**kwargs):
         """
             This function adds an media_entry to the database.
             
@@ -640,7 +644,11 @@ class media_database_sql:
         if any([k not in supported_attribs for k in attribs]):
             raise NotImplementedError
         
-        curs = self.connection.cursor()
+        if cursor == None:
+            curs = self.connection.cursor()
+        else:
+            curs = cursor
+
         # create the entry in the main MediaEntryDB:
         try:
             curs.execute("""INSERT INTO MediaEntries VALUES 
@@ -683,11 +691,12 @@ class media_database_sql:
                 querry = "INSERT INTO {} VALUES (?,?) ;".format(supported_attribs[a][1])
                 params = [mediaid,attribID] 
                 curs.execute(querry,params)
-        self.connection.commit()
-        curs.close()
+        if cursor == None:
+            self.connection.commit()
+            curs.close()
         return
         
-    def delete_entry(self,entry):
+    def delete_entry(self,entry,cursor=None):
         """
             remove a media entry from the database
         """
@@ -706,7 +715,11 @@ class media_database_sql:
                 ['TagMedia','tagMediaID'],
                 ]
         
-        curs = self.connection.cursor()
+        if cursor == None:
+            curs = self.connection.cursor()
+        else:
+            curs = cursor
+
         #we use foreign keys to keep the tables consistend 
         #therefore we need to delete entries bottom up, starting with
         #the attrib join tables
@@ -731,8 +744,9 @@ class media_database_sql:
         querry = "DELETE FROM MediaEntries WHERE mediaID = ? ;"
         curs.execute(querry,mediaID)
         
-        self.connection.commit()
-        curs.close()
+        if cursor == None:
+            self.connection.commit()
+            curs.close()
         return
     
     def clean_attrib_dbs(self):
@@ -768,7 +782,7 @@ class media_database_sql:
         curs.close()
         return
         
-    def update_entry(self,entry,update_attrib=False):
+    def update_entry(self,entry,cursor=None,update_attrib=False):
         """
             This function updates a media_entry in the database.
         """
@@ -812,7 +826,11 @@ class media_database_sql:
         if any([k not in supported_attribs for k in attribs]):
             raise NotImplementedError
         
-        curs = self.connection.cursor()
+        if cursor == None:
+            curs = self.connection.cursor()
+        else:
+            curs = cursor
+
         # determine if the media type was changed
         curs.execute("""SELECT type 
                     FROM MediaEntries 
@@ -902,9 +920,10 @@ class media_database_sql:
                             """.format(supported_attribs[a][1])
                     params = [mediaid,attribID] 
                     curs.execute(querry,params)
-
-        self.connection.commit()
-        curs.close()
+        
+        if cursor == None:
+            self.connection.commit()
+            curs.close()
         return    
     
     def create_media_entry_from_db(self,path):
@@ -1044,52 +1063,97 @@ class media_database_sql:
         return self.create_media_entry_from_db(random.choice(selection)[0])
                 
     
-    def fill(self,d,ty='unknown'):
+    def fill(self,ty='unknown'):
         """
-            \TODO this needs to be reimplemented for sql
-            fills all the media entries in directory d into the media database
+            fills all the media entries in the parent directory into the media database
         """
-        self.dlist = self.find_media_entries(d,ty)
-        for d in self.dlist:
-            for a in d.attrib.keys():
-                if not a in self.alist:
-                    self.alist[a] = 1
-                else:
-                    self.alist[a] = self.alist[a] + 1
-        self.saved = False
-    
-    def update(self,d,ty='unknown'):
+        
+        dlist = self.find_media_entries(self.parent,ty)
+        
+        self.add_entries(dlist)
+        return
+        
+    def add_entries(self,elist):
         """
-            \TODO this needs to be reimplemented for sql
+            add several entries
+            this is more efficient than adding the entries 
+            individually due to a combindes database commit
+        """
+        curs = self.connection.cursor()
+
+        for e in elist:
+            try:
+                self.add_entry(e,cursor=curs)
+                self.saved = False
+            except IntegrityError:
+                pass
+        self.connection.commit()
+        curs.close()
+        return
+
+    def delete_entries(self,elist):
+        """
+            delete several entries
+            this is more efficient than adding the entries 
+            individually due to a combindes database commit
+        """
+        curs = self.connection.cursor()
+
+        for e in elist:
+            self.delete_entry(e,cursor=curs)
+            self.saved = False
+
+        self.connection.commit()
+        curs.close()
+        return
+                
+    def update(self,ty='unknown'):
+        """
             if new media entries are created or old ones are deleted from disk,
             the media database will usually not react to it
             
-            update searches the directory d and compares the media entries in it 
+            update searches the parent folder and compares the media entries in it 
             with all the media entries. 
             Removes those that are not there anymore and
-            adds those that are missing in the current list 
+            adds those that are missing in the database 
         """
-        inlist = self.find_media_entries(d,ty)
-        curlist = list(self.dlist)
-        for i in inlist:
-            found = False
-            for j in curlist:
-                if i == j:
-                    found = True
-                    curlist.remove(j)
-                    break
-            if not found:
-                self.add_entry(i)
-                
-        if len(curlist) > 0:
-            for i in curlist:
-                self.delete_entry(i)
+        inlist = os.listdir(self.parent)
         
+        curs = self.connection.cursor()
+        
+        querry = "SELECT path from MediaEntries"
+        curlist = querry.fetchall()
+        curlist = [i[0] for i in curlist]
+        
+        curlist = sorted(curlist)
+        inlist = sorted(inlist)
+        
+        toadd = []
+        todelete = []
+        
+        offset = 0
+        for e,i in enumerate(inlist):
+            while curlist[e+offset] < i:
+                entry = self.create_empty_entry(curlist[e+offset])
+                todelete.append(entry)
+                offset = offset + 1
+            if curlist[e+offset] > i:
+                entry = self.create_empty_entry(i)
+                toadd.append(entry)
+                offset = offset - 1
+               
+        if len(toadd) > 0:
+            self.add_entries(toadd)
+        if len(todelete) > 0:
+            self.delete_entries(todelete)
+            
+        self.connection.commit()
+        self.cursor.close()
         self.saved = False
+        return
         
     def find_media_entries(self,d,ty):
         """
-            \TODO this needs to be reimplemented for sql
             search for all folder/files in the directory d.
             It will create a media entry for each folder/file it finds.
             ty specifies the type of media entries that will be created
@@ -1098,25 +1162,34 @@ class media_database_sql:
         res = []
         for i in os.listdir(d):
             path = os.path.join(d,i)
-            if ty == 'unknown':
-                t = self.determine_media_type(path)
-            else:
-                t = ty
-                
-            if t == 'video':
-                new_entry = video_entry(path,style = self.v_style)
-            elif t == 'music':
-                new_entry = music_entry(path,style = self.m_style)
-            elif t == 'exec':
-                new_entry = executable_entry(path,style = self.e_style)
-            elif t == 'picture':
-                new_entry = picture_entry(path,style = self.p_style)
-            else:
-                new_entry = media_entry(path)
-
-            res.append(new_entry)
+            res.append(self.create_empty_entry(path,ty))    
         return res
         
+    def create_empty_entry(self,path,typ):
+        """
+            create an empty media entry object for a given path
+            typ specifies the type of media entry that will be created
+            if typ == unknown, the type of the media entry will be determined first
+        """
+        if ty == 'unknown':
+            t = self.determine_media_type(path)
+        else:
+            t = ty
+            
+        if t == 'video':
+            new_entry = video_entry(path,style = self.v_style)
+        elif t == 'music':
+            new_entry = music_entry(path,style = self.m_style)
+        elif t == 'exec':
+            new_entry = executable_entry(path,style = self.e_style)
+        elif t == 'picture':
+            new_entry = picture_entry(path,style = self.p_style)
+        else:
+            new_entry = media_entry(path)
+
+        return new_entry
+    
+    
     def determine_media_type(self,path):
         """
             This function takes a path as an input and then searches through all the files associated with that path (recursively!).
@@ -1158,37 +1231,56 @@ class media_database_sql:
         else:
             return 'unknown'
         
+        
     
-        
+    def find_entry(self,dstring):
+        """
+            searches for a media entry by its display string
+            
+            since we now save the display strings in the database, 
+            this is just a wrapper for create_media_entry_from_db
+        """        
+        return self.create_media_entry_from_db(dstring)
 
-        
-    def change_style(self):
-        """
-            \TODO this needs to be reimplemented for sql
-            changes the execution style for a specific media entry type
-            //TODO this has to be done for every element of the respective type
-        """
-        return None
-        
     def get_selection(self,*args,**kwargs):
         """
             \TODO this needs to be reimplemented for sql
             filters all media entries. Uses the match_selection function of the entries
         """
-        return None
+        # also update the gui to handle the new selector function. 
+        # this is the chance to make something new there as well!
         
-    def get_entry(self,name):
+        # what is the list of attributes we can search for - extract from metatable?
         """
-           \TODO this needs to be reimplemented for sql
-            searches for a media entry by its hash
+        SELECT name FROM sqlite_master
+        WHERE type='table'
+        ORDER BY name;
+
+        To get column names for a given table, use the pragma table_info command:
+
+            This pragma returns one row for each column in the named table. Columns in the result set include the column name, data type, whether or not the column can be NULL, and the default value for the column.
+
+        This command works just fine from python:
+
+        >>> import sqlite3
+        >>> conn = sqlite3.connect(':mem:')
+        >>> for row in conn.execute("pragma table_info('sqlite_master')").fetchall():
+        ...     print row
+        ... 
+        (0, u'type', u'text', 0, None, 0)
+        (1, u'name', u'text', 0, None, 0)
+        (2, u'tbl_name', u'text', 0, None, 0)
+        (3, u'rootpage', u'integer', 0, None, 0)
+        (4, u'sql', u'text', 0, None, 0)
         """
-        return None
-    
-    def find_entry(self,dstring):
-        """
-            \TODO this needs to be reimplemented for sql
-            searches for a media entry by its display string
-        """        
+        
+        
+        # is there a nice way to handle AND , OR in querries and input field 
+        # (input field: use e.g. different separators ";" for OR and "," for AND)
+        
+        #use separate querries for each attribute in the filtering
+        #(see update querries)
+        
         return None
         
     def get_attrib_stat(self):
@@ -1201,7 +1293,14 @@ class media_database_sql:
     
     def get_entry_count(self):
         """
-            \TODO this needs to be reimplemented for sql
             how many media entries do we have?
         """
-        return None
+        curs = self.connection.cursor()
+        
+        querry = "SELECT mediaID from MediaEntries"
+        curlist = querry.fetchall()
+        ncount = len(curlist)
+        
+        curs.close()
+        
+        return ncount

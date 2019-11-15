@@ -184,7 +184,7 @@ class Application(tk.Tk):
     def linkFile(self,event):
         id = self.dataBase.get(tk.ACTIVE)
         try:
-            entry = self.media_database.get_entry(id)
+            entry = self.media_database.find_entry(id)
             #open dialog to find destination of link
         #    os.link()
         except:
