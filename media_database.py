@@ -447,7 +447,7 @@ class media_database_sql:
         # rows in the track table There is one exception: 
         # if the foreign key column in the track table is NULL, 
         # then no corresponding entry in the artist table is required."
-        c.execute('''CREATE TABLE VideoEntries
+        c.execute('''CREATE TABLE Type_Video
             (mediaID integer, 
              actorMediaID integer, 
              tagMediaID integer, 
@@ -455,7 +455,7 @@ class media_database_sql:
              length real,
              FOREIGN KEY(mediaID) REFERENCES MediaEntries(mediaID))
             ''')
-        c.execute('''CREATE TABLE MusicEntries
+        c.execute('''CREATE TABLE Type_Music
             (mediaID integer, 
              artistMediaID integer, 
              tagMediaID integer, 
@@ -463,46 +463,46 @@ class media_database_sql:
              ntracks integer,
              FOREIGN KEY(mediaID) REFERENCES MediaEntries(mediaID))
             ''')
-        c.execute('''CREATE TABLE PictureEntries
+        c.execute('''CREATE TABLE Type_Picture
             (mediaID integer, 
              tagMediaID integer,
              npics integer,
              FOREIGN KEY(mediaID) REFERENCES MediaEntries(mediaID))
             ''')
-        c.execute('''CREATE TABLE ExecutableEntries
+        c.execute('''CREATE TABLE Type_Executable
             (mediaID integer, 
              tagMediaID integer,
              FOREIGN KEY(mediaID) REFERENCES MediaEntries(mediaID))
             ''')
         
         # Tables and Indizes for each attribute
-        c.execute('''CREATE TABLE Actor
+        c.execute('''CREATE TABLE Attribute_Actor
             (actorID integer primary key, 
              name text)
             ''')
         c.execute('''CREATE UNIQUE INDEX actorName
-            ON Actor(name);
+            ON Attribute_Actor(name);
             ''')          
-        c.execute('''CREATE TABLE Artist
+        c.execute('''CREATE TABLE Attribute_Artist
             (artistID integer primary key, 
              name text)
             ''')
         c.execute('''CREATE UNIQUE INDEX artistName
-            ON Artist(name);
+            ON Attribute_Artist(name);
             ''')          
-        c.execute('''CREATE TABLE Tag
+        c.execute('''CREATE TABLE Attribute_Tag
             (tagID integer primary key, 
              name text)
             ''')
         c.execute('''CREATE UNIQUE INDEX tagName
-            ON Tag(name);
+            ON Attribute_Tag(name);
             ''')          
-        c.execute('''CREATE TABLE Genre
+        c.execute('''CREATE TABLE Attribute_Genre
             (genreID integer primary key, 
              name text)
             ''')
         c.execute('''CREATE UNIQUE INDEX genreName
-            ON Genre(name);
+            ON Attribute_Genre(name);
             ''')          
                   
         # Join Tables
@@ -510,25 +510,25 @@ class media_database_sql:
             (genreMediaID integer, 
              genreID integer,
              FOREIGN KEY(genreMediaID) REFERENCES MediaEntries(mediaID),
-             FOREIGN KEY(genreID) REFERENCES Genre(genreID))
+             FOREIGN KEY(genreID) REFERENCES Attribute_Genre(genreID))
             ''')
         c.execute('''CREATE TABLE ActorMedia
             (actorMediaID integer, 
              actorID integer,
              FOREIGN KEY(actorMediaID) REFERENCES MediaEntries(mediaID),
-             FOREIGN KEY(actorID) REFERENCES Actor(actorID))
+             FOREIGN KEY(actorID) REFERENCES Attribute_Actor(actorID))
             ''')
         c.execute('''CREATE TABLE ArtistMedia
             (artistMediaID integer, 
              artistID integer,
              FOREIGN KEY(artistMediaID) REFERENCES MediaEntries(mediaID),
-             FOREIGN KEY(artistID) REFERENCES Artist(artistID))
+             FOREIGN KEY(artistID) REFERENCES Attribute_Artist(artistID))
             ''')
         c.execute('''CREATE TABLE TagMedia
             (tagMediaID integer, 
              tagID integer,
              FOREIGN KEY(tagMediaID) REFERENCES MediaEntries(mediaID),
-             FOREIGN KEY(tagID) REFERENCES Tag(tagID))
+             FOREIGN KEY(tagID) REFERENCES Attribute_Tag(tagID))
             ''')
                   
         connection.commit()
@@ -543,14 +543,14 @@ class media_database_sql:
         """
         tablelist = [
                     'MediaEntries',
-                    'VideoEntries',
-                    'PictureEntries',
-                    'MusicEntries',
-                    'ExecutableEntriesEntries',
-                    'Actor',
-                    'Artist',
-                    'Tag',
-                    'Genre',
+                    'Type_Video',
+                    'Type_Picture',
+                    'Type_Music',
+                    'Type_ExecutableEntries',
+                    'Attribute_Actor',
+                    'Attribute_Artist',
+                    'Attribute_Tag',
+                    'Attribute_Genre',
                     'GenreMedia',
                     'TagMedia',
                     'ActorMedia',
@@ -620,10 +620,10 @@ class media_database_sql:
         #supported attribs gives the Attrib table 
         #and the corresponding Joining table
         supported_attribs = {
-                    'actors': ['Actor','ActorMedia'],
-                    'artist': ['Artist','ArtistMedia'],
-                    'genre': ['Genre','GenreMedia'],
-                    'tags': ['Tag','TagMedia'],
+                    'actors': ['Attribute_Actor','ActorMedia'],
+                    'artist': ['Attribute_Artist','ArtistMedia'],
+                    'genre': ['Attribute_Genre','GenreMedia'],
+                    'tags': ['Attribute_Tag','TagMedia'],
                     'ntracks': [] ,
                     'npics': [],
                     'length': [],
@@ -633,10 +633,10 @@ class media_database_sql:
         #and the corresponding number of common attrib columns
         #and the corresponding specific attrib columns
         supported_types = {
-                    'exec': ['ExecutableEntries',1,[]],
-                    'video': ['VideoEntries',3,['length']],
-                    'music': ['MusicEntries',2,['ntracks']],
-                    'picture': ['PictureEntries',1,['npics']]
+                    'exec': ['Type_Executable',1,[]],
+                    'video': ['Type_Video',3,['length']],
+                    'music': ['Type_Music',2,['ntracks']],
+                    'picture': ['Type_Picture',1,['npics']]
                     }
         
         if typ not in supported_types:
@@ -702,10 +702,10 @@ class media_database_sql:
         """
         
         supported_types = {
-                   'exec': ['ExecutableEntries'],
-                   'video': ['VideoEntries'],
-                   'music': ['MusicEntries'],
-                   'picture': ['PictureEntries'],
+                   'exec': ['Type_Executable'],
+                   'video': ['Type_Video'],
+                   'music': ['Type_Music'],
+                   'picture': ['Type_Picture'],
                    }
         
         join_tables = [
@@ -757,10 +757,10 @@ class media_database_sql:
             various tables 
         """
         attrib_tables = [
-                    'Actor',
-                    'Artist',
-                    'Genre',
-                    'Tag',
+                    'Attribute_Actor',
+                    'Attribute_Artist',
+                    'Attribute_Genre',
+                    'Attribute_Tag',
                     ]
         
         curs = self.connection.cursor()
@@ -802,10 +802,10 @@ class media_database_sql:
         #supported attribs gives the Attrib table 
         #and the corresponding Joining table
         supported_attribs = {
-                    'actors': ['Actor','ActorMedia'],
-                    'artist': ['Artist','ArtistMedia'],
-                    'genre': ['Genre','GenreMedia'],
-                    'tags': ['Tag','TagMedia'],
+                    'actors': ['Attribute_Actor','ActorMedia'],
+                    'artist': ['Attribute_Artist','ArtistMedia'],
+                    'genre': ['Attribute_Genre','GenreMedia'],
+                    'tags': ['Attribute_Tag','TagMedia'],
                     'ntracks': [] ,
                     'npics': [],
                     'length': [],
@@ -815,10 +815,10 @@ class media_database_sql:
         #and the corresponding number of common attrib columns
         #and the corresponding specific attrib columns
         supported_types = {
-                    'exec': ['ExecutableEntries',1,[]],
-                    'video': ['VideoEntries',3,['length']],
-                    'music': ['MusicEntries',2,['ntracks']],
-                    'picture': ['PictureEntries',1,['npics']]
+                    'exec': ['Type_Executable',1,[]],
+                    'video': ['Type_Video',3,['length']],
+                    'music': ['Type_Music',2,['ntracks']],
+                    'picture': ['Type_Picture',1,['npics']]
                     }
         
         if typ not in supported_types:
@@ -959,10 +959,10 @@ class media_database_sql:
             }
 
         supported_attribs = {
-                    'actors': ['Actor','ActorMedia','actorID','actorMediaID'],
-                    'artist': ['Artist','ArtistMedia','artistID','artistMediaID'],
-                    'genre': ['Genre','GenreMedia','genreID','genreMediaID'],
-                    'tags': ['Tag','TagMedia','tagID','tagMediaID'],
+                    'actors': ['Attribute_Actor','ActorMedia','actorID','actorMediaID'],
+                    'artist': ['Attribute_Artist','ArtistMedia','artistID','artistMediaID'],
+                    'genre': ['Attribute_Genre','GenreMedia','genreID','genreMediaID'],
+                    'tags': ['Attribute_Tag','TagMedia','tagID','tagMediaID'],
                     }
                     
 
@@ -1000,8 +1000,8 @@ class media_database_sql:
             querry = """SELECT 
                             {}.name AS name
                         FROM MediaEntries 
-                            INNER JOIN {} ON {}.{}ActorMedia.actorMediaID = MediaEntries.MediaID 
-                            INNER JOIN {} ON {}.{} = {}.{}ActorMedia.actorID = Actor.ActorID 
+                            INNER JOIN {} ON {}.{} 
+                            INNER JOIN {} ON {}.{} = {}.{} 
                         WHERE path = ?
                     """.format([
                       tables[0],
@@ -1282,7 +1282,97 @@ class media_database_sql:
         #(see update querries)
         
         return None
+    
+    def get_type_list(self,cursor=None)
+        """returns a list of all media types in the database 
+        """
+        if cursor == None:
+            curs = self.connection.cursor()
+        else:
+            curs = cursor
+        curs.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table';""")
+        tables = curs.fetchall()
         
+        if cursor != None:
+            curs.close()
+        
+        type_names = []
+        for t in tables:
+            if t.startswith('Type_'):
+                type_names.append(t[5:])
+                
+        return type_names
+        
+    def get_attribute_list(self,type=None,cursor=None,common=True,special=True)
+        """returns a list of all possible attributes of either the whole database (type==None)
+           or of a specific media type (type=="type")
+        """
+        
+        #we have comman attributes and special attributs
+        
+        if cursor == None:
+            curs = self.connection.cursor()
+        else:
+            curs = cursor
+        
+        attribs = []
+        #common attributes can be found over their repective tables
+        if common:
+            curs.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table';""")
+            tables = curs.fetchall()
+        
+            for t in tables:
+                if t.startswith('Attribute_'):
+                    attribs.append(t[10:])
+        
+        #special attributes can be found in the respective type tables
+        if special:
+            if type != None:
+                typetables = [type]
+            else:
+                typetables = self.get_type_list(cursor=curs)        
+            
+            for t in typetables:
+                for row in conn.execute("pragma table_info('{}')".format(t)).fetchall():
+                    if not row[0].endswith('ID'):
+                        attribs.append(row[0])
+            
+            if cursor != None:
+                curs.close()
+        
+        return attribs 
+
+    def get_associated_tables(self,attribute,cursor=None)
+        """returns a list of all type tables associated with a given attribute 
+        """
+        
+        if cursor == None:
+            curs = self.connection.cursor()
+        else:
+            curs = cursor
+        
+        tabels = []
+                
+        #special attributes can be found in the respective type tables
+        typetables = self.get_type_list(cursor=curs)        
+        
+        for t in typetables:
+            for row in conn.execute("pragma table_info('{}')".format(t)).fetchall():
+                if ( row[0] == attribute or
+                     row[0].endswith('ID') and 
+                        row[0].startswith(attribute.lowercase())
+                    ):
+                    tables.append(t)
+        
+        if cursor != None:
+            curs.close()
+        
+        return tables 
+    
     def get_attrib_stat(self):
         """
             \TODO this needs to be reimplemented for sql
