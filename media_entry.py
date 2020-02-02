@@ -3,7 +3,7 @@ import random
 import sys
 import cv2
 mswindows = (sys.platform == "win32")
-from mdb_util import ensureStringlist 
+from mdb_util import ensureStringList, ensureList, makeAttribList 
 
 if mswindows:
     from subprocess import list2cmdline
@@ -84,11 +84,14 @@ class media_entry:
         """
             This will save any kwarg to the attrib dictionary of the media_entry.
             If the attrib entry already exists, it will be skipped.
+            
+            We can add attrib entries with any datatype here, but we should 
+            make sure that they are consistend 
         """
         keys = kwargs.keys()
         for i in keys:
             if not self.attrib.has_key(i):
-                self.attrib[i] = ensureStringlist(kwargs[i])
+                self.attrib[i] = makeAttribList(kwargs[i])
     
     def update_attrib(self,**kwargs):
         """
@@ -98,7 +101,17 @@ class media_entry:
         keys = kwargs.keys()
         for i in keys:
             if self.attrib.has_key(i):
-                self.attrib[i] = ensureStringlist(kwargs[i])
+                update = makeAttribList(kwargs[i])
+                ttype = type(self.attrib[i][0])
+                if ttype in (str,unicode):
+                    ttype = basestring
+                if not isinstance(update[0],ttype):
+                    msg = """Update to {} is of type {}, 
+                            but should be type {}""".format(
+                            i,type(update[0]),type(self.attrib[i][0])
+                            )
+                    raise TypeError(msg)
+                self.attrib[i] = makeAttribList(kwargs[i])
                     
     def remove_attrib(self,**kwargs):
         """
@@ -141,6 +154,7 @@ class media_entry:
             checks if the media entry matches a filter, 
             based on type, style, name and attributes 
         \\TODO check if this works
+        \\TODO add type consideration in the matching process
         """
         if not type == '' and not self.type == type:
             return False
@@ -152,7 +166,7 @@ class media_entry:
         keys = kwargs.keys()
         for i in keys:
             if self.attrib.has_key(i):
-                args = ensureStringlist(kwargs[i])
+                args = makeAttribList(kwargs[i])
                     
                 match = [False for j in args]
                 
@@ -247,7 +261,7 @@ class video_entry(media_entry):
             v=cv2.VideoCapture(f)
             v.set(cv2.CAP_PROP_POS_AVI_RATIO,1)
             length = length + v.get(cv2.CAP_PROP_POS_MSEC)
-        self.attrib['length'] = ensureStringlist(length / 1000.0)
+        self.attrib['length'] = makeAttribList(length / 1000.0)
     
 class music_entry(media_entry):
     """
@@ -273,7 +287,7 @@ class music_entry(media_entry):
         self.attrib['tags'] = ensureStringlist(tags)
         self.attrib['artist'] = ensureStringlist(artist)
         self.attrib['genre'] = ensureStringlist(genre)
-        self.attrib['ntacks'] = ensureStringlist(len(self.filepath))
+        self.attrib['ntacks'] = makeAttribList(len(self.filepath))
         
     
 class picture_entry(media_entry):
@@ -290,7 +304,7 @@ class picture_entry(media_entry):
                             style=style,
                             **kwargs)
         self.attrib['tags'] = ensureStringlist(tags)
-        self.attrib['npics'] = ensureStringlist(len(self.filepath))
+        self.attrib['npics'] = makeAttribList(len(self.filepath))
     
     
 class executable_entry(media_entry):

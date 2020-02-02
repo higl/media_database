@@ -36,12 +36,23 @@ def displayString(s):
     tmpstr = tmpstr.rstrip(' , ')
     return tmpstr
     
-def ensurelist(lis):
+def ensureList(lis):
     if not isinstance(lis,list):
         lis = [lis]
     return lis
 
-def ensureStringlist(lis):
-    lis = ensurelist(lis)    
+def ensureStringList(lis):
+    lis = ensureList(lis)    
     lis = [str(i) for i in lis]
+    return lis
+
+def makeAttribList(lis):
+    lis = ensureList(lis)
+    ttype = type(lis[0])
+    #handling of strings:
+    if ttype in (str,unicode):
+        ttype = basestring
+    if not all([isinstance(i,ttype) for i in lis]):
+        raise TypeError('Entries in Attribute Lists all need to have the same datatype!')
+    
     return lis
