@@ -1,6 +1,7 @@
 import os
 import random
 import sys
+import cv2
 mswindows = (sys.platform == "win32")
 
 if mswindows:

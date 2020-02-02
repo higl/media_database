@@ -2,6 +2,7 @@ import os
 import random
 import sys
 import sqlite3
+import cv2
 from media_entry import *
 import pickle
 from time import time
@@ -381,6 +382,12 @@ class media_database_sql:
         """ Initialize a database connection. Create the database first if no other file is given.        
         """       
         
+        self.parent = os.path.normpath(parent)
+        self.p_style = p_style
+        self.v_style = v_style
+        self.m_style = m_style
+        self.e_style = e_style
+        
         if os.path.isfile(d):
             self.connection = sqlite3.connect(d)
             self.connection.execute("PRAGMA foreign_keys = 1")
@@ -395,7 +402,6 @@ class media_database_sql:
         else:
             self.connection = self._create_db_(d)
             self.fill()
-        self.parent = os.path.normpath(parent)
         
         if os.path.getmtime(parent) > os.path.getmtime(d) or force_update:
             self.update()
@@ -546,7 +552,7 @@ class media_database_sql:
                     'Type_Video',
                     'Type_Picture',
                     'Type_Music',
-                    'Type_ExecutableEntries',
+                    'Type_Executable',
                     'Attribute_Actor',
                     'Attribute_Artist',
                     'Attribute_Tag',
@@ -569,9 +575,9 @@ class media_database_sql:
         curs.execute("""
                 SELECT name FROM sqlite_master 
                 WHERE type='table' AND name=?;""",
-                name)
-        
-        return not curs.fetchone() == None
+                [name])
+        fetch = curs.fetchone()
+        return not fetch == None
         
     def _convert_pkl_to_sqlite_(self,d,conn):
         """
@@ -615,7 +621,7 @@ class media_database_sql:
         typ = new_entry.type
         style = new_entry.style
         played = int(new_entry.played)
-        attribs = new_entry.attribs
+        attribs = new_entry.attrib
         
         #supported attribs gives the Attrib table 
         #and the corresponding Joining table
@@ -636,13 +642,22 @@ class media_database_sql:
                     'exec': ['Type_Executable',1,[]],
                     'video': ['Type_Video',3,['length']],
                     'music': ['Type_Music',2,['ntracks']],
-                    'picture': ['Type_Picture',1,['npics']]
+                    'picture': ['Type_Picture',1,['npics']],
+                    'unknown' : []
                     }
         
         if typ not in supported_types:
-            raise NotImplementedError
+            raise NotImplementedError(
+                '{} is not in the list of supported types'.format(typ)
+                )
         if any([k not in supported_attribs for k in attribs]):
-            raise NotImplementedError
+            error = ''
+            for k in attribs:
+                if k not in supported_attribs:
+                    error = ' ' + error + k 
+            raise NotImplementedError(
+                '{} is not in the list of supported attributes'.format(error)
+                )
         
         if cursor == None:
             curs = self.connection.cursor()
@@ -659,16 +674,17 @@ class media_database_sql:
         
         mediaid = curs.lastrowid
         
-        # create the entry in the type DB
-        querry = "INSERT INTO {} VALUES (?".format(supported_types[typ][0])
-        querry = querry + ',?' * supported_types[typ][1] 
-        querry = querry + ',?' * len(supported_types[typ][2])
-        querry = querry + ');'
-        params = [mediaid]*(supported_types[typ][1]+1)
-        for a in supported_types[typ][2]:
-            params.append(attribs[a])
-        
-        curs.execute(querry,params)
+        # create the entry in the type DB. Unknown Types have no type DB!
+        if not typ == 'unknown':
+            querry = "INSERT INTO {} VALUES (?".format(supported_types[typ][0])
+            querry = querry + ',?' * supported_types[typ][1] 
+            querry = querry + ',?' * len(supported_types[typ][2])
+            querry = querry + ');'
+            params = [mediaid]*(supported_types[typ][1]+1)
+            for a in supported_types[typ][2]:
+                params.append(attribs[a])
+            
+            curs.execute(querry,params)
         
         for a in attribs:
             if len(supported_attribs[a]) != 2:
@@ -685,6 +701,7 @@ class media_database_sql:
                 except sqlite3.IntegrityError:
                     querry = "SELECT ROWID FROM {} WHERE name=? ;".format(supported_attribs[a][0])
                     params = e
+                    e = self.sanitize_querry(e)
                     curs.execute(querry,[e])
                     attribID = curs.fetchone()[0]
                 # create the entries in the corresponding JOIN Tables
@@ -706,6 +723,7 @@ class media_database_sql:
                    'video': ['Type_Video'],
                    'music': ['Type_Music'],
                    'picture': ['Type_Picture'],
+                   'unknown': [],
                    }
         
         join_tables = [
@@ -726,7 +744,7 @@ class media_database_sql:
         
         #get the identifier ID:
         querry = "SELECT ROWID FROM MediaEntries WHERE path = ? ;"
-        path = [entry.get_display_string()]
+        path = [self.sanitize_querry(entry.get_display_string())]
         curs.execute(querry,path)
         mediaID = curs.fetchone()[0]
         
@@ -735,10 +753,11 @@ class media_database_sql:
             querry = "DELETE FROM {} WHERE {} = ? ;".format(t[0],t[1])
             curs.execute(querry,mediaID)
         
-        #delete entry from media type db:
-        table = supported_types[entry.type][0]
-        querry = "DELETE FROM {} WHERE mediaID = ? ;".format(table)
-        curs.execute(querry,mediaID)
+        if not entry.type == 'unknown':
+            #delete entry from media type db:
+            table = supported_types[entry.type][0]
+            querry = "DELETE FROM {} WHERE mediaID = ? ;".format(table)
+            curs.execute(querry,mediaID)
         
         #finially we can delete the entry from the main db:
         querry = "DELETE FROM MediaEntries WHERE mediaID = ? ;"
@@ -775,6 +794,7 @@ class media_database_sql:
             for n in names:
                 querry = "DELETE FROM {} WHERE name = ?".format(table)
                 try:
+                    n = self.sanitize_querry(n)
                     curs.execute(querry,n)
                 except sqlite3.IntegrityError:
                     pass
@@ -797,7 +817,7 @@ class media_database_sql:
         typ = entry.type
         style = entry.style
         played = int(entry.played)
-        attribs = entry.attribs
+        attribs = entry.attrib
         
         #supported attribs gives the Attrib table 
         #and the corresponding Joining table
@@ -832,11 +852,12 @@ class media_database_sql:
             curs = cursor
 
         # determine if the media type was changed
+        p = [self.sanitize_querry(path)]
         curs.execute("""SELECT type 
                     FROM MediaEntries 
                     WHERE
                         path = ? ;""",
-                  (path))
+                    p)
         otype = curs.fetchone()[0]
         typechange = otype.__ne__(typ)
 
@@ -849,7 +870,7 @@ class media_database_sql:
                         played = ?
                     WHERE
                         path = ? ;""",
-                  (typ,style,played,path))
+                  (typ,style,played,p))
         
         mediaid = curs.lastrowid
         
@@ -910,6 +931,7 @@ class media_database_sql:
                     except sqlite3.IntegrityError:
                         querry = "SELECT ROWID FROM {} WHERE name=? ;".format(supported_attribs[a][0])
                         params = e
+                        e = self.sanitize_querry(e)
                         curs.execute(querry,[e])
                         attribID = curs.fetchone()[0]
                     # create the entries in the corresponding JOIN Tables
@@ -942,7 +964,7 @@ class media_database_sql:
         #and is only allowed to go 1 level deeper
         if os.path.exists(path):
             split = os.path.split(path)
-            if split[0] == self.parent:
+            if split[0] == self.parent or os.getcwd() == self.parent:
                 path = split[1]
             else:
                 raise AttributeError('This path is not part of the database')
@@ -950,12 +972,13 @@ class media_database_sql:
             join = os.path.join(self.parent,path)
             if not os.path.exists(join):
                 raise AttributeError('This path is not part of the database')
-            
+        
         supported_types = {
             'exec': [executable_entry,['tags']],
             'video': [video_entry,['tags', 'actors', 'genre']],
             'music': [music_entry,['tags', 'artist', 'genre']],
-            'picture': [picture_entry,['tags']]
+            'picture': [picture_entry,['tags']],
+            'unknown': [media_entry, []],
             }
 
         supported_attribs = {
@@ -965,7 +988,6 @@ class media_database_sql:
                     'tags': ['Attribute_Tag','TagMedia','tagID','tagMediaID'],
                     }
                     
-
         curs = self.connection.cursor()
         
         #select the rows from the main table and set the 
@@ -976,11 +998,12 @@ class media_database_sql:
                         played
                     FROM MediaEntries
                     WHERE path = ?"""
+        path = self.sanitize_querry(path)
         curs.execute(querry, [path])
         res = curs.fetchone() #paths are unique!
         typ = res[0]
         style = res[1]
-        played = res[2]
+        played = bool(res[2])
 
         #for now there is no need to select any data from the 
         #type tables, because all quantities stored there, are 
@@ -996,14 +1019,10 @@ class media_database_sql:
         
         attribs = {}
         for a in supported_types[typ][1]:
+            print a, supported_attribs[a]
+
             tables = supported_attribs[a]
-            querry = """SELECT 
-                            {}.name AS name
-                        FROM MediaEntries 
-                            INNER JOIN {} ON {}.{} 
-                            INNER JOIN {} ON {}.{} = {}.{} 
-                        WHERE path = ?
-                    """.format([
+            print [
                       tables[0],
                       tables[1],
                       tables[1],
@@ -1013,8 +1032,26 @@ class media_database_sql:
                       tables[2],
                       tables[0],
                       tables[2],
-                    ])
+                    ]
+            querry = """SELECT 
+                            {}.name AS name
+                        FROM MediaEntries 
+                            INNER JOIN {} ON {}.{} = MediaEntries.MediaID
+                            INNER JOIN {} ON {}.{} = {}.{} 
+                        WHERE path = ?
+                    """.format(
+                      tables[0],
+                      tables[1],
+                      tables[1],
+                      tables[3],
+                      tables[0],
+                      tables[1],
+                      tables[2],
+                      tables[0],
+                      tables[2]
+                    )
             print querry
+            # path is already sanitized
             curs.execute(querry,[path])
             res = curs.fetchall()
             attribs[a] = [i[0] for i in res]
@@ -1023,8 +1060,9 @@ class media_database_sql:
         
         creator = supported_types[typ][0]
         path = os.path.join(self.parent,path)
-        
-        entry = creator(path,style=style,type=typ,played=played,**attribs)
+        print attribs
+        # the creator function takes care of type handling
+        entry = creator(path,style=style,played=played,**attribs)
         return entry
         
     def get_random_entry(self,single=False,selection=None):
@@ -1085,7 +1123,7 @@ class media_database_sql:
             try:
                 self.add_entry(e,cursor=curs)
                 self.saved = False
-            except IntegrityError:
+            except sqlite3.IntegrityError:
                 pass
         self.connection.commit()
         curs.close()
@@ -1122,7 +1160,8 @@ class media_database_sql:
         curs = self.connection.cursor()
         
         querry = "SELECT path from MediaEntries"
-        curlist = querry.fetchall()
+        curs.execute(querry)
+        curlist = curs.fetchall()
         curlist = [i[0] for i in curlist]
         
         curlist = sorted(curlist)
@@ -1134,11 +1173,11 @@ class media_database_sql:
         offset = 0
         for e,i in enumerate(inlist):
             while curlist[e+offset] < i:
-                entry = self.create_empty_entry(curlist[e+offset])
+                entry = self.create_empty_entry(curlist[e+offset],'unknown')
                 todelete.append(entry)
                 offset = offset + 1
             if curlist[e+offset] > i:
-                entry = self.create_empty_entry(i)
+                entry = self.create_empty_entry(i,'unknown')
                 toadd.append(entry)
                 offset = offset - 1
                
@@ -1148,7 +1187,7 @@ class media_database_sql:
             self.delete_entries(todelete)
             
         self.connection.commit()
-        self.cursor.close()
+        curs.close()
         self.saved = False
         return
         
@@ -1165,7 +1204,7 @@ class media_database_sql:
             res.append(self.create_empty_entry(path,ty))    
         return res
         
-    def create_empty_entry(self,path,typ):
+    def create_empty_entry(self,path,ty):
         """
             create an empty media entry object for a given path
             typ specifies the type of media entry that will be created
@@ -1283,7 +1322,7 @@ class media_database_sql:
         
         return None
     
-    def get_type_list(self,cursor=None)
+    def get_type_list(self,cursor=None):
         """returns a list of all media types in the database 
         """
         if cursor == None:
@@ -1305,7 +1344,7 @@ class media_database_sql:
                 
         return type_names
         
-    def get_attribute_list(self,type=None,cursor=None,common=True,special=True)
+    def get_attribute_list(self,type=None,cursor=None,common=True,special=True):
         """returns a list of all possible attributes of either the whole database (type==None)
            or of a specific media type (type=="type")
         """
@@ -1346,7 +1385,7 @@ class media_database_sql:
         
         return attribs 
 
-    def get_associated_tables(self,attribute,cursor=None)
+    def get_associated_tables(self,attribute,cursor=None):
         """returns a list of all type tables associated with a given attribute 
         """
         
@@ -1394,3 +1433,15 @@ class media_database_sql:
         curs.close()
         
         return ncount
+    
+    def sanitize_querry(self,path):
+        """ replace special chars in sql querries with the appropriate escape characters
+        """
+        
+        chars = ["'"]
+        
+        for c in chars:
+            path = path.replace("\\"+c,c) # protection from 'double sanitize'
+            path = path.replace(c,"\\"+c)
+            
+        return path
