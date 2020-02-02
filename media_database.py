@@ -609,6 +609,8 @@ class media_database_sql:
             the external new entry.  
             If the existing entry should be overwritten by 
             the external entry, then update_entry should be used.  
+            
+            special attributes are restricted to one element!
         """
         path = new_entry.get_display_string()
         if not os.path.exists(os.path.join(self.parent,path)):
@@ -658,7 +660,7 @@ class media_database_sql:
             raise NotImplementedError(
                 '{} is not in the list of supported attributes'.format(error)
                 )
-        
+                
         if cursor == None:
             curs = self.connection.cursor()
         else:
@@ -682,8 +684,7 @@ class media_database_sql:
             querry = querry + ');'
             params = [mediaid]*(supported_types[typ][1]+1)
             for a in supported_types[typ][2]:
-                params.append(attribs[a])
-            
+                params.append(attribs[a][0])
             curs.execute(querry,params)
         
         for a in attribs:
@@ -696,6 +697,7 @@ class media_database_sql:
                 # \\syntax 
                 querry = "INSERT INTO {} VALUES (null,?) ;".format(supported_attribs[a][0])
                 try:
+                    # e should already be a list
                     curs.execute(querry,[e])
                     attribID = curs.lastrowid
                 except sqlite3.IntegrityError:
@@ -708,6 +710,7 @@ class media_database_sql:
                 querry = "INSERT INTO {} VALUES (?,?) ;".format(supported_attribs[a][1])
                 params = [mediaid,attribID] 
                 curs.execute(querry,params)
+
         if cursor == None:
             self.connection.commit()
             curs.close()
@@ -716,6 +719,8 @@ class media_database_sql:
     def delete_entry(self,entry,cursor=None):
         """
             remove a media entry from the database
+            
+            if the media entry does not exists, this function silently exits
         """
         
         supported_types = {
@@ -746,22 +751,27 @@ class media_database_sql:
         querry = "SELECT ROWID FROM MediaEntries WHERE path = ? ;"
         path = [self.sanitize_querry(entry.get_display_string())]
         curs.execute(querry,path)
-        mediaID = curs.fetchone()[0]
+        mediaID = curs.fetchone()
+        if mediaID != None:
+            mediaID = mediaID[0]
+        else: 
+            # this entry does not exist in the tables, we silently exit here
+            return
         
         #delete entries from join_tables
         for t in join_tables:
             querry = "DELETE FROM {} WHERE {} = ? ;".format(t[0],t[1])
-            curs.execute(querry,mediaID)
+            curs.execute(querry,[mediaID])
         
         if not entry.type == 'unknown':
             #delete entry from media type db:
             table = supported_types[entry.type][0]
             querry = "DELETE FROM {} WHERE mediaID = ? ;".format(table)
-            curs.execute(querry,mediaID)
+            curs.execute(querry,[mediaID])
         
         #finially we can delete the entry from the main db:
         querry = "DELETE FROM MediaEntries WHERE mediaID = ? ;"
-        curs.execute(querry,mediaID)
+        curs.execute(querry,[mediaID])
         
         if cursor == None:
             self.connection.commit()
@@ -806,7 +816,7 @@ class media_database_sql:
         """
             This function updates a media_entry in the database.
         """
-        path = new_entry.get_display_string()
+        path = entry.get_display_string()
         if not os.path.exists(os.path.join(self.parent,path)):
             print """
                     ERROR: media database currently 
@@ -852,19 +862,18 @@ class media_database_sql:
             curs = cursor
 
         # determine if the media type was changed
-        p = [self.sanitize_querry(path)]
+        p = self.sanitize_querry(path)
         curs.execute("""SELECT type 
                     FROM MediaEntries 
                     WHERE
                         path = ? ;""",
-                    p)
+                    [p])
         otype = curs.fetchone()[0]
         typechange = otype.__ne__(typ)
 
-        
         # update the entry in the main MediaEntryDB:
         curs.execute("""UPDATE MediaEntries 
-                    SET VALUES 
+                    SET 
                         type = ?,
                         style = ?,
                         played = ?
@@ -1019,20 +1028,7 @@ class media_database_sql:
         
         attribs = {}
         for a in supported_types[typ][1]:
-            print a, supported_attribs[a]
-
             tables = supported_attribs[a]
-            print [
-                      tables[0],
-                      tables[1],
-                      tables[1],
-                      tables[3],
-                      tables[0],
-                      tables[1],
-                      tables[2],
-                      tables[0],
-                      tables[2],
-                    ]
             querry = """SELECT 
                             {}.name AS name
                         FROM MediaEntries 
@@ -1050,7 +1046,6 @@ class media_database_sql:
                       tables[0],
                       tables[2]
                     )
-            print querry
             # path is already sanitized
             curs.execute(querry,[path])
             res = curs.fetchall()
@@ -1060,7 +1055,6 @@ class media_database_sql:
         
         creator = supported_types[typ][0]
         path = os.path.join(self.parent,path)
-        print attribs
         # the creator function takes care of type handling
         entry = creator(path,style=style,played=played,**attribs)
         return entry
@@ -1270,7 +1264,6 @@ class media_database_sql:
         else:
             return 'unknown'
         
-        
     
     def find_entry(self,dstring):
         """
@@ -1334,17 +1327,17 @@ class media_database_sql:
                 WHERE type='table';""")
         tables = curs.fetchall()
         
-        if cursor != None:
+        if cursor == None:
             curs.close()
         
         type_names = []
         for t in tables:
-            if t.startswith('Type_'):
-                type_names.append(t[5:])
+            if t[0].startswith('Type_'):
+                type_names.append(t[0][5:])
                 
         return type_names
         
-    def get_attribute_list(self,type=None,cursor=None,common=True,special=True):
+    def get_attribute_list(self,typ=None,cursor=None,common=True,special=True):
         """returns a list of all possible attributes of either the whole database (type==None)
            or of a specific media type (type=="type")
         """
@@ -1365,23 +1358,35 @@ class media_database_sql:
             tables = curs.fetchall()
         
             for t in tables:
-                if t.startswith('Attribute_'):
-                    attribs.append(t[10:])
+                if t[0].startswith('Attribute_'):
+                    attribs.append(t[0][10:])
         
         #special attributes can be found in the respective type tables
-        if special:
-            if type != None:
-                typetables = [type]
+        if special or typ != None:
+            if typ != None:
+                typetables = [typ]
             else:
                 typetables = self.get_type_list(cursor=curs)        
-            
+            if common and typ != None:
+                mask = [False]*len(attribs)
             for t in typetables:
-                for row in conn.execute("pragma table_info('{}')".format(t)).fetchall():
-                    if not row[0].endswith('ID'):
-                        attribs.append(row[0])
+                t = 'Type_' + t
+                for row in curs.execute("pragma table_info('{}')".format(t)).fetchall():
+                    if special and not row[1].endswith('ID'):
+                        # we are searching for special attributes
+                        attribs.append(row[1])
+                    if common and typ != None:
+                        # we filter the common attributes that match the Type
+                        for i,a in enumerate(attribs):
+                            if (row[1].startswith(a.lower())
+                                and row[1].endswith('MediaID')):
+                                    mask[i] = True
+        if common and typ != None:
+            attr = [attribs[i] for i in range(len(mask)) if mask[i]]
+            attribs = attr + attribs[len(mask):]
             
-            if cursor != None:
-                curs.close()
+        if cursor == None:
+            curs.close()
         
         return attribs 
 
@@ -1394,20 +1399,22 @@ class media_database_sql:
         else:
             curs = cursor
         
-        tabels = []
+        tables = []
                 
         #special attributes can be found in the respective type tables
         typetables = self.get_type_list(cursor=curs)        
         
         for t in typetables:
-            for row in conn.execute("pragma table_info('{}')".format(t)).fetchall():
-                if ( row[0] == attribute or
-                     row[0].endswith('ID') and 
-                        row[0].startswith(attribute.lowercase())
+            t = 'Type_' + t
+            for row in curs.execute("pragma table_info('{}')".format(t)).fetchall():
+                if ( row[1] == attribute or
+                     row[1].endswith('ID') and 
+                        row[1].startswith(attribute.lower())
                     ):
                     tables.append(t)
+
         
-        if cursor != None:
+        if cursor == None:
             curs.close()
         
         return tables 
@@ -1427,7 +1434,8 @@ class media_database_sql:
         curs = self.connection.cursor()
         
         querry = "SELECT mediaID from MediaEntries"
-        curlist = querry.fetchall()
+        curs.execute(querry)
+        curlist = curs.fetchall()
         ncount = len(curlist)
         
         curs.close()
@@ -1438,10 +1446,10 @@ class media_database_sql:
         """ replace special chars in sql querries with the appropriate escape characters
         """
         
-        chars = ["'"]
+        #chars = [u"'"]
         
-        for c in chars:
-            path = path.replace("\\"+c,c) # protection from 'double sanitize'
-            path = path.replace(c,"\\"+c)
+        #for c in chars:
+        #    path = path.replace(u"\\"+c,c) # protection from 'double sanitize'
+        #    path = path.replace(c,u"\\"+c)
             
         return path

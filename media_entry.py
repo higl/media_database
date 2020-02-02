@@ -97,20 +97,27 @@ class media_entry:
         """
             This will update any kwarg in the attrib dictionary of the media_entry.
             If the attrib entry does not exist, it will be skipped.
+            
+            We raise an error when the datatype of the update 
+            does not match the old datatype. This does not 
+            work if the old entry is an empty list. In this 
+            case the datatype of the update will be excepted anyway.
+            The same is true for emptying the attribute list
         """    
         keys = kwargs.keys()
         for i in keys:
             if self.attrib.has_key(i):
                 update = makeAttribList(kwargs[i])
-                ttype = type(self.attrib[i][0])
-                if ttype in (str,unicode):
-                    ttype = basestring
-                if not isinstance(update[0],ttype):
-                    msg = """Update to {} is of type {}, 
-                            but should be type {}""".format(
-                            i,type(update[0]),type(self.attrib[i][0])
-                            )
-                    raise TypeError(msg)
+                if len(self.attrib[i]) > 0 and len(update) > 0:
+                    ttype = type(self.attrib[i][0])
+                    if ttype in (str,unicode):
+                        ttype = basestring
+                    if not isinstance(update[0],ttype):
+                        msg = """Update to {} is of type {}, 
+                                but should be type {}""".format(
+                                i,type(update[0]),type(self.attrib[i][0])
+                                )
+                        raise TypeError(msg)
                 self.attrib[i] = makeAttribList(kwargs[i])
                     
     def remove_attrib(self,**kwargs):
