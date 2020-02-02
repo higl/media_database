@@ -35,3 +35,13 @@ def displayString(s):
     tmpstr = tmpstr.lstrip(' , ')    
     tmpstr = tmpstr.rstrip(' , ')
     return tmpstr
+    
+def ensurelist(lis):
+    if not isinstance(lis,list):
+        lis = [lis]
+    return lis
+
+def ensureStringlist(lis):
+    lis = ensurelist(lis)    
+    lis = [str(i) for i in lis]
+    return lis

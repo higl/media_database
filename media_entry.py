@@ -3,6 +3,7 @@ import random
 import sys
 import cv2
 mswindows = (sys.platform == "win32")
+from mdb_util import ensureStringlist 
 
 if mswindows:
     from subprocess import list2cmdline
@@ -87,10 +88,7 @@ class media_entry:
         keys = kwargs.keys()
         for i in keys:
             if not self.attrib.has_key(i):
-                if not isinstance(kwargs[i],basestring):
-                    self.attrib[i] = [str(j) for j in kwargs[i]]
-                else:
-                    self.attrib[i] = [kwargs[i]]
+                self.attrib[i] = ensureStringlist(kwargs[i])
     
     def update_attrib(self,**kwargs):
         """
@@ -100,10 +98,7 @@ class media_entry:
         keys = kwargs.keys()
         for i in keys:
             if self.attrib.has_key(i):
-                if not isinstance(kwargs[i],basestring):
-                    self.attrib[i] = [str(j) for j in kwargs[i]]
-                else:
-                    self.attrib[i] = [kwargs[i]]
+                self.attrib[i] = ensureStringlist(kwargs[i])
                     
     def remove_attrib(self,**kwargs):
         """
@@ -157,10 +152,7 @@ class media_entry:
         keys = kwargs.keys()
         for i in keys:
             if self.attrib.has_key(i):
-                if not isinstance(kwargs[i],basestring):
-                    args = kwargs[i]
-                else:
-                    args = [kwargs[i]]
+                args = ensureStringlist(kwargs[i])
                     
                 match = [False for j in args]
                 
@@ -247,15 +239,15 @@ class video_entry(media_entry):
                             format=self.accepted_video_formats,
                             style=style,
                             **kwargs)
-        self.attrib['tags'] = tags
-        self.attrib['actors'] = actors
-        self.attrib['genre'] = [genre]
+        self.attrib['tags'] = ensureStringlist(tags)
+        self.attrib['actors'] = ensureStringlist(actors)
+        self.attrib['genre'] = ensureStringlist(genre)
         length = 0.0
         for f in self.filepath:
             v=cv2.VideoCapture(f)
             v.set(cv2.CAP_PROP_POS_AVI_RATIO,1)
             length = length + v.get(cv2.CAP_PROP_POS_MSEC)
-        self.attrib['length'] = length / 1000.0
+        self.attrib['length'] = ensureStringlist(length / 1000.0)
     
 class music_entry(media_entry):
     """
@@ -278,10 +270,10 @@ class music_entry(media_entry):
                             format=self.accepted_music_formats,
                             style=style,
                             **kwargs)
-        self.attrib['tags'] = tags
-        self.attrib['artist'] = artist
-        self.attrib['genre'] = genre
-        self.attrib['ntacks'] = len(self.filepath)
+        self.attrib['tags'] = ensureStringlist(tags)
+        self.attrib['artist'] = ensureStringlist(artist)
+        self.attrib['genre'] = ensureStringlist(genre)
+        self.attrib['ntacks'] = ensureStringlist(len(self.filepath))
         
     
 class picture_entry(media_entry):
@@ -297,8 +289,8 @@ class picture_entry(media_entry):
                             format=self.accepted_picture_formats,
                             style=style,
                             **kwargs)
-        self.attrib['tags'] = tags
-        self.attrib['npics'] = len(self.filepath)
+        self.attrib['tags'] = ensureStringlist(tags)
+        self.attrib['npics'] = ensureStringlist(len(self.filepath))
     
     
 class executable_entry(media_entry):
@@ -314,4 +306,4 @@ class executable_entry(media_entry):
                             format=self.accepted_exe_formats,
                             style=style,
                             **kwargs)
-        self.attrib['tags'] = tags
+        self.attrib['tags'] = ensureStringlist(tags)
