@@ -253,9 +253,9 @@ class video_entry(media_entry):
                             format=self.accepted_video_formats,
                             style=style,
                             **kwargs)
-        self.attrib['tags'] = ensureStringlist(tags)
-        self.attrib['actors'] = ensureStringlist(actors)
-        self.attrib['genre'] = ensureStringlist(genre)
+        self.attrib['tags'] = ensureStringList(tags)
+        self.attrib['actors'] = ensureStringList(actors)
+        self.attrib['genre'] = ensureStringList(genre)
         length = 0.0
         for f in self.filepath:
             v=cv2.VideoCapture(f)
@@ -284,9 +284,9 @@ class music_entry(media_entry):
                             format=self.accepted_music_formats,
                             style=style,
                             **kwargs)
-        self.attrib['tags'] = ensureStringlist(tags)
-        self.attrib['artist'] = ensureStringlist(artist)
-        self.attrib['genre'] = ensureStringlist(genre)
+        self.attrib['tags'] = ensureStringList(tags)
+        self.attrib['artist'] = ensureStringList(artist)
+        self.attrib['genre'] = ensureStringList(genre)
         self.attrib['ntacks'] = makeAttribList(len(self.filepath))
         
     
@@ -303,7 +303,7 @@ class picture_entry(media_entry):
                             format=self.accepted_picture_formats,
                             style=style,
                             **kwargs)
-        self.attrib['tags'] = ensureStringlist(tags)
+        self.attrib['tags'] = ensureStringList(tags)
         self.attrib['npics'] = makeAttribList(len(self.filepath))
     
     
@@ -320,4 +320,4 @@ class executable_entry(media_entry):
                             format=self.accepted_exe_formats,
                             style=style,
                             **kwargs)
-        self.attrib['tags'] = ensureStringlist(tags)
+        self.attrib['tags'] = ensureStringList(tags)
