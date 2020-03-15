@@ -1019,13 +1019,6 @@ class media_database_sql:
         #calculated while entry creation. In the future this might change
         #which is why we give a template for those kind of selects here:
         
-        #   querry=""" SELECT
-                      # *attribs*
-                      # FROM MediaEntries
-                        # INNER JOIN *typetabel* ON *typetable*.mediaID = MediaEntries.MediaID
-                      # WHERE path = ? ;
-                   # """.format([attribs,typetable])
-        
         attribs = {}
         for a in supported_types[typ][1]:
             tables = supported_attribs[a]
@@ -1046,6 +1039,7 @@ class media_database_sql:
                       tables[0],
                       tables[2]
                     )
+
             # path is already sanitized
             curs.execute(querry,[path])
             res = curs.fetchall()
@@ -1278,7 +1272,13 @@ class media_database_sql:
         """
             \TODO this needs to be reimplemented for sql
             filters all media entries. Uses the match_selection function of the entries
+            
+            we are using LIKE searches here for the sql statements 
+            once we are on python3 and a more recent sqlite version 
+            we might want to change this to WHERE instr(*column*,'string') > 0 
+            (which is then also case sensitive)
         """
+        
         # also update the gui to handle the new selector function. 
         # this is the chance to make something new there as well!
         
@@ -1305,8 +1305,29 @@ class media_database_sql:
         (3, u'rootpage', u'integer', 0, None, 0)
         (4, u'sql', u'text', 0, None, 0)
         """
-        
-        
+
+        """
+        old version:
+        keys = kwargs.keys()
+        for i in keys:
+            if self.attrib.has_key(i):
+                args = makeAttribList(kwargs[i])
+                    
+                match = [False for j in args]
+                
+                for e,j in enumerate(args):
+                    if case_sensitive:
+                        match[e] = any(j in k for k in self.attrib[i])
+                    else:
+                        match[e] = any(j.lower() in k.lower() for k in self.attrib[i])
+                            
+                if not all(match):
+                    return False
+            else:
+                return False
+        return True
+        """
+
         # is there a nice way to handle AND , OR in querries and input field 
         # (input field: use e.g. different separators ";" for OR and "," for AND)
         
@@ -1318,20 +1339,168 @@ class media_database_sql:
         
         #also querry for the display strings. We will need them in the GUI
         
+        
+        #We will have different querries for common and special attributes 
+        #therefore we need to sort the selector attributes into those categories
+        #we will also separate the 'types' attribute as a special case
+        
+        try:
+            global_mode = kwargs.pop('global_mode')
+        except:
+            global_mode = 'AND'
+        
+        curs = self.connection.cursor()
+        
+        special_attribs = self.get_attribute_list(cursor=curs,common=False,special=True)
+        common_attribs = self.get_attribute_list(cursor=curs,common=True,special=False)
+        
+        global_selector = {}
+        special_selector = {}
+        common_selector = {}
+        
+        keys = kwargs.keys()
+        for k in keys:
+            if k in ['type','path','style','played']:
+                global_selector[k] = kwargs[k]
+            elif k in special_attribs:
+                special_selector[k] = kwargs[k]
+            elif k in common_attribs:
+                common_selector[k] = kwargs[k]
+            else:
+                raise NotImplementedError("""we cannot find the attrib {}. 
+                                           The selector is therefore invalid""".format(k))
+        
         results = []
-        querry = ''
-        for atr in atribs:
-            input = selector[atr]
-            input, mode = self.parse_input(input)
+        
+        #first we make a querry on the global attributes stored in the main media table 
+        for atr in type_selector:
+            s, mode = parse_input(type_selector[atr])
             
-            if mode == 'OR' or (mode == 'GLOBAL' and global_mode == 'OR'):
-                querry += 'WHERE {} IS {:: \' OR \'}'.format(atr,input)
-            if mode == 'AND' or (mode == 'GLOBAL' and global_mode == 'AND'):
-                querry += 'WHERE {} IS {:: \' OR \'}'.format(atr,input)
+            isstring = self.is_string_attrib(atr,cursor=curs)
             
+            querry = """
+                        SELECT mediaID, path FROM MediaEntries WHERE
+                     """
+            if mode == 'GLOBAL':
+                    mode = global_mode
+                    
+            if isstring:
+                querry += '\n'.join(['    {} LIKE {!r} {}'.format(atr,t,mode) for t in s[:-1]])
+                querry += '\n    {} LIKE {!r};'.format(atr,s[-1])
+            else:
+                operators = []
+                numbers = []
+                for n in s:
+                    op,num = self.get_math_operator(n)
+                    operators.append(op)
+                    numbers.append(num)
+                    
+                querry += '\n'.join(
+                        ['    {} {} {} {}'.format(atr,o,n,mode) 
+                            for o,n in zip(operators[:-1],numbers[:-1])
+                        ]
+                    )
+                querry += '\n    {} {} {} {};'.format(atr,operators[-1],numbers[-1],mode) 
+            
+            curs.execute(querry)
             results.append(curs.fetchall())
             
-        return results
+        #now we search for the special attributes 
+        #those are located in the type tables  
+        for atr in special_selector:
+            tables = self.get_associated_tables(atr,cursor=curs)
+            isstring = self.is_string_attrib(atr,cursor=curs)
+            
+            for t in tables:
+                s, mode = parse_input(special_selector[atr])
+                
+                querry = """
+                            SELECT mediaID, path FROM MediaEntries
+                                INNER JOIN {} ON {}.mediaID = MediaEntries.MediaID
+                            WHERE
+                         """.format(t,t)
+                         
+                if mode == 'GLOBAL':
+                    mode = global_mode
+                    
+                if isstring:
+                    querry += '\n'.join(['    {} LIKE {!r} {}'.format(atr,t,mode) for t in s[:-1]])
+                    querry += '\n    {} LIKE {!r};'.format(atr,s[-1])
+                else:
+                    operators = []
+                    numbers = []
+                    for n in s:
+                        op,num = self.get_math_operator(n)
+                        operators.append(op)
+                        numbers.append(num)
+                        
+                    querry += '\n'.join(
+                            ['    {} {} {} {}'.format(atr,o,n,mode) 
+                                for o,n in zip(operators[:-1],numbers[:-1])
+                            ]
+                        )
+                    querry += '\n    {} {} {} {};'.format(atr,operators[-1],numbers[-1],mode) 
+                
+                curs.execute(querry)
+                results.append(curs.fetchall())
+
+
+        #now we search for the common attributes - these are all strings!
+        for atr in common_selector:
+            s, mode = parse_input(special_selector[atr])
+
+            """
+                Example:
+                SELECT 
+                    mediaID, path
+                FROM MediaEntries 
+                    INNER JOIN ActorMedia ON ActorMedia.actorMediaID = MediaEntries.MediaID
+                    INNER JOIN Attribute_Actor ON ActorMedia.actorID = Attribut_Actor.actorID 
+                WHERE path = ?
+                 
+            """              
+            join_t = atr + 'Media'
+            attr_t = 'Attribute_' + atr
+            column = atr.lower() + 'ID'
+            join_c = atr.lower() + 'MediaID'
+            querry = """
+                        SELECT mediaID, path FROM MediaEntries
+                            INNER JOIN {} ON {}.{} = MediaEntries.MediaID
+                            INNER JOIN {} ON {}.{} = {}.{}
+                        WHERE
+                     """.format(join_t,join_t,join_c,attr_t,join_t,column,attr_t,column)
+
+            if mode == 'GLOBAL':
+                mode = global_mode
+                
+            querry += '\n'.join(['    {} LIKE {!r} {}'.format(atr,t,mode) for t in s[:-1]])
+            querry += '\n    {} LIKE {!r};'.format(atr,s[-1])
+            
+            curs.execute(querry)
+            results.append(curs.fetchall())
+
+        if len(results) == 0:
+            querry = """
+                        SELECT mediaID, path FROM MediaEntries
+                     """
+            curs.execute(querry)
+            res = curs.fetchall()
+        elif global_mode == 'OR':
+            res = []
+            for r in results:
+                res += r
+            res = list(set(res))
+        elif global_mode == 'AND':
+            res = results[0]
+            for check in results[1:]:
+                res = [list(filter(lambda x: x in check, r)) for r in res]
+        else:
+            raise NotImplementedError('unknown selector mode')
+            
+        res = [ r[1] for r in res]
+        
+        curs.close()
+        return res 
     
     def parse_input(self,string):
         """
@@ -1341,6 +1510,10 @@ class media_database_sql:
             
             a single quote will convert the rest 
             of the string into a single word
+            
+            we also used this to sanitize the strings (escape characters)
+            and to include '%' at the beginning and end of each word 
+            to enable 'LIKE' searches
             
             if the first word is 'AND' or 'OR'
             we will perform the search for this specific 
@@ -1366,8 +1539,41 @@ class media_database_sql:
             querry = querry[1:]
         else:
             mode = 'GLOBAL'
+        
+        for i,q in enumerate(querry):
+            querry[i] = '%'+q+'%'
             
         return querry, mode
+    
+    def get_math_operator(self,string):
+        """
+            extract the math operator we need for the sql querry 
+            for ints and floats 
+        """
+        
+        if string.startswith(['<=','>=']):
+            operator = string[:2]
+            try:
+                number = string[2:]
+            except:
+                print """
+                      Warning no number associated with this operator. 
+                      Do not leave spaces inbetween operator and number in search bar!
+                      """
+        elif string.startswith(['<','>','=']):
+            operator = string[:1]
+            try:
+                number = string[1:]
+            except:
+                print """
+                      Warning no number associated with this operator. 
+                      Do not leave spaces inbetween operator and number in search bar!
+                      """
+        else:
+            operator = '='
+            number = string
+            
+        return operator, number 
     
     def get_type_list(self,cursor=None):
         """returns a list of all media types in the database 
@@ -1462,8 +1668,8 @@ class media_database_sql:
             t = 'Type_' + t
             for row in curs.execute("pragma table_info('{}')".format(t)).fetchall():
                 if ( row[1] == attribute or
-                     row[1].endswith('ID') and 
-                        row[1].startswith(attribute.lower())
+                     (row[1].endswith('ID') and 
+                      row[1].startswith(attribute.lower()))
                     ):
                     tables.append(t)
 
@@ -1472,6 +1678,41 @@ class media_database_sql:
             curs.close()
         
         return tables 
+
+    def is_string_attrib(self,attribute,cursor=None):
+        """determine if a attribute column is defined with a string data type
+           
+           this only makes sense for special attributes since common attributes are 
+           always defined as strings! - We might want to lift this restriction in the future, 
+                                        but currently I don't see a usable case for common (=many to many relationship)
+                                        integer/float attributes 
+        """
+        
+        if cursor == None:
+            curs = self.connection.cursor()
+        else:
+            curs = cursor
+                        
+        #special attributes can be found in the respective type tables
+        typetables = self.get_type_list(cursor=curs)        
+        
+        isstring = False
+        for t in typetables:
+            t = 'Type_' + t
+            for row in curs.execute("pragma table_info('{}')".format(t)).fetchall():
+                if row[1] == attribute and row[2] == 'text':
+                    isstring = True
+                    break
+        # also check the main MediaEntries table!
+        for row in curs.execute("pragma table_info('MediaEntries')").fetchall():
+                if row[1] == attribute and row[2] == 'text':
+                    isstring = True
+                    break
+                    
+        if cursor == None:
+            curs.close()
+        
+        return isstring
     
     def get_attrib_stat(self):
         """
