@@ -1310,10 +1310,64 @@ class media_database_sql:
         # is there a nice way to handle AND , OR in querries and input field 
         # (input field: use e.g. different separators ";" for OR and "," for AND)
         
-        #use separate querries for each attribute in the filtering
+        #use separate querries for each attribute in the filtering 
         #(see update querries)
         
-        return None
+        #then filter the single querry results for matching mediaIDs (AND case) 
+        #or concatenate the results into a unique set (OR case)
+        
+        #also querry for the display strings. We will need them in the GUI
+        
+        results = []
+        querry = ''
+        for atr in atribs:
+            input = selector[atr]
+            input, mode = self.parse_input(input)
+            
+            if mode == 'OR' or (mode == 'GLOBAL' and global_mode == 'OR'):
+                querry += 'WHERE {} IS {:: \' OR \'}'.format(atr,input)
+            if mode == 'AND' or (mode == 'GLOBAL' and global_mode == 'AND'):
+                querry += 'WHERE {} IS {:: \' OR \'}'.format(atr,input)
+            
+            results.append(curs.fetchall())
+            
+        return results
+    
+    def parse_input(self,string):
+        """
+            separate the input string into its words
+            where double quotes can define words with 
+            spaces and have to be accounted for
+            
+            a single quote will convert the rest 
+            of the string into a single word
+            
+            if the first word is 'AND' or 'OR'
+            we will perform the search for this specific 
+            attribute in the respective mode. 
+            Otherwise we will use the global mode that 
+            is used to combine the searches for all attributes
+        """
+        split = string.split('"')
+        
+        querry = []
+        for s in split[0::2]:
+            querry += list(s.split(' '))
+        
+        if len(split) > 1:
+            for s in split[1::2]:
+                querry += [s]
+        
+        if querry[0] == 'AND':
+            mode = 'AND'
+            querry = querry[1:]
+        elif querry[0] == 'OR': 
+            mode = 'OR'
+            querry = querry[1:]
+        else:
+            mode = 'GLOBAL'
+            
+        return querry, mode
     
     def get_type_list(self,cursor=None):
         """returns a list of all media types in the database 
