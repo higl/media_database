@@ -163,7 +163,12 @@ class media_database:
         """
         res = []
         for i in os.listdir(d):
-            path = d + '/' + i 
+            path = os.path.join(d,i)
+            
+            # skip the db file itself
+            if path == self.db_path:
+                continue 
+            
             if ty == 'unknown':
                 t = self.determine_media_type(path)
             else:
@@ -383,13 +388,18 @@ class media_database_sql:
         """       
         
         self.parent = os.path.normpath(parent)
+        self.parent = os.path.normcase(self.parent)
+        self.db_path = os.path.abspath(d) #this allows us to also store the 
+                                          #db in a relative path 
+        self.db_path = os.path.normcase(self.db_path)
+        
         self.p_style = p_style
         self.v_style = v_style
         self.m_style = m_style
         self.e_style = e_style
         
-        if os.path.isfile(d):
-            self.connection = sqlite3.connect(d)
+        if os.path.isfile(self.db_path):
+            self.connection = sqlite3.connect(self.db_path)
             self.connection.execute("PRAGMA foreign_keys = 1")
 
             if not self._check_db_(self.connection):
@@ -400,10 +410,10 @@ class media_database_sql:
                 a database that is not a media database at all.
                 """)
         else:
-            self.connection = self._create_db_(d)
+            self.connection = self._create_db_(self.db_path)
             self.fill()
         
-        if os.path.getmtime(parent) > os.path.getmtime(d) or force_update:
+        if os.path.getmtime(parent) > os.path.getmtime(self.db_path) or force_update:
             self.update()
         return
         
@@ -971,16 +981,18 @@ class media_database_sql:
         #on top of the parent directory here
         #Be aware that the full path still needs to contain the parent path
         #and is only allowed to go 1 level deeper
+        
+        cwd = os.path.normcase(os.getcwd())
         if os.path.exists(path):
-            split = os.path.split(path)
-            if split[0] == self.parent or os.getcwd() == self.parent:
+            split = os.path.split(os.path.normcase(path))
+            if split[0] == self.parent or cwd == self.parent:
                 path = split[1]
             else:
-                raise AttributeError('This path is not part of the database')
+                raise AttributeError('{} is not part of the database'.format(path))
         else:
             join = os.path.join(self.parent,path)
             if not os.path.exists(join):
-                raise AttributeError('This path is not part of the database')
+                raise AttributeError('{} is not part of the database'.format(join))
         
         supported_types = {
             'exec': [executable_entry,['tags']],
@@ -1095,7 +1107,7 @@ class media_database_sql:
         """
         
         dlist = self.find_media_entries(self.parent,ty)
-        
+
         self.add_entries(dlist)
         return
         
@@ -1160,6 +1172,9 @@ class media_database_sql:
         
         offset = 0
         for e,i in enumerate(inlist):
+            #skip the db file itself 
+            if os.path.normcase(os.path.join(self.parent,i)) == self.db_path:
+                continue
             while curlist[e+offset] < i:
                 entry = self.create_empty_entry(curlist[e+offset],'unknown')
                 todelete.append(entry)
@@ -1189,6 +1204,11 @@ class media_database_sql:
         res = []
         for i in os.listdir(d):
             path = os.path.join(d,i)
+            
+            # skip the db file itself
+            if os.path.normcase(path) == self.db_path:
+                continue
+            
             res.append(self.create_empty_entry(path,ty))    
         return res
         
