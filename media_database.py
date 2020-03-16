@@ -1290,79 +1290,29 @@ class media_database_sql:
 
     def get_selection(self,*args,**kwargs):
         """
-            \TODO this needs to be reimplemented for sql
-            filters all media entries. Uses the match_selection function of the entries
+            filters all media entries based on a the kwargs dictionary
+            passed to this function 
             
-            we are using LIKE searches here for the sql statements 
+            keywords are filtered into global, common, and special attributes
+            
+            'global_mode' is a special keyword and can change the behaviour how 
+            we combine the querries for each attribute at the end. 
+            possible options are 'AND' or 'OR'. The default behaviour is 'AND'
+            
+            if a keyword does not fit into any of the groups, we will raise an
+            error 
+            
+            we are using LIKE searches here for the string sql statements 
             once we are on python3 and a more recent sqlite version 
             we might want to change this to WHERE instr(*column*,'string') > 0 
             (which is then also case sensitive)
-        """
-        
-        # also update the gui to handle the new selector function. 
-        # this is the chance to make something new there as well!
-        
-        # what is the list of attributes we can search for - extract from metatable?
-        """
-        SELECT name FROM sqlite_master
-        WHERE type='table'
-        ORDER BY name;
-
-        To get column names for a given table, use the pragma table_info command:
-
-            This pragma returns one row for each column in the named table. Columns in the result set include the column name, data type, whether or not the column can be NULL, and the default value for the column.
-
-        This command works just fine from python:
-
-        >>> import sqlite3
-        >>> conn = sqlite3.connect(':mem:')
-        >>> for row in conn.execute("pragma table_info('sqlite_master')").fetchall():
-        ...     print row
-        ... 
-        (0, u'type', u'text', 0, None, 0)
-        (1, u'name', u'text', 0, None, 0)
-        (2, u'tbl_name', u'text', 0, None, 0)
-        (3, u'rootpage', u'integer', 0, None, 0)
-        (4, u'sql', u'text', 0, None, 0)
-        """
-
-        """
-        old version:
-        keys = kwargs.keys()
-        for i in keys:
-            if self.attrib.has_key(i):
-                args = makeAttribList(kwargs[i])
-                    
-                match = [False for j in args]
-                
-                for e,j in enumerate(args):
-                    if case_sensitive:
-                        match[e] = any(j in k for k in self.attrib[i])
-                    else:
-                        match[e] = any(j.lower() in k.lower() for k in self.attrib[i])
-                            
-                if not all(match):
-                    return False
-            else:
-                return False
-        return True
-        """
-
-        # is there a nice way to handle AND , OR in querries and input field 
-        # (input field: use e.g. different separators ";" for OR and "," for AND)
-        
-        #use separate querries for each attribute in the filtering 
-        #(see update querries)
-        
-        #then filter the single querry results for matching mediaIDs (AND case) 
-        #or concatenate the results into a unique set (OR case)
-        
-        #also querry for the display strings. We will need them in the GUI
-        
+            
+            \\TODO update gui to show and enable all possible selection attributes and options of this function. (use get_attribute_list and add another checkbox) 
+        """        
         
         #We will have different querries for common and special attributes 
         #therefore we need to sort the selector attributes into those categories
-        #we will also separate the 'types' attribute as a special case
+        #we will also separate the 'global_mode' attribute as a special case
         
         try:
             global_mode = kwargs.pop('global_mode')
@@ -1393,10 +1343,9 @@ class media_database_sql:
         results = []
         
         #first we make a querry on the global attributes stored in the main media table 
-        for atr in type_selector:
-            s, mode = parse_input(type_selector[atr])
-            
+        for atr in global_selector:            
             isstring = self.is_string_attrib(atr,cursor=curs)
+            s, mode = self.parse_input(global_selector[atr],like_prep=isstring)
             
             querry = """
                         SELECT mediaID, path FROM MediaEntries WHERE
@@ -1420,10 +1369,11 @@ class media_database_sql:
                             for o,n in zip(operators[:-1],numbers[:-1])
                         ]
                     )
-                querry += '\n    {} {} {} {};'.format(atr,operators[-1],numbers[-1],mode) 
+                querry += '\n    {} {} {};'.format(atr,operators[-1],numbers[-1]) 
             
             curs.execute(querry)
             results.append(curs.fetchall())
+            
             
         #now we search for the special attributes 
         #those are located in the type tables  
@@ -1432,11 +1382,14 @@ class media_database_sql:
             isstring = self.is_string_attrib(atr,cursor=curs)
             
             for t in tables:
-                s, mode = parse_input(special_selector[atr])
+                s, mode = self.parse_input(special_selector[atr],like_prep=isstring)
                 
                 querry = """
-                            SELECT mediaID, path FROM MediaEntries
-                                INNER JOIN {} ON {}.mediaID = MediaEntries.MediaID
+                            SELECT 
+                                MediaEntries.mediaID, MediaEntries.path 
+                            FROM 
+                                MediaEntries
+                                INNER JOIN {} ON {}.mediaID = MediaEntries.mediaID
                             WHERE
                          """.format(t,t)
                          
@@ -1453,13 +1406,13 @@ class media_database_sql:
                         op,num = self.get_math_operator(n)
                         operators.append(op)
                         numbers.append(num)
-                        
+                    
                     querry += '\n'.join(
                             ['    {} {} {} {}'.format(atr,o,n,mode) 
                                 for o,n in zip(operators[:-1],numbers[:-1])
                             ]
                         )
-                    querry += '\n    {} {} {} {};'.format(atr,operators[-1],numbers[-1],mode) 
+                    querry += '\n    {} {} {};'.format(atr,operators[-1],numbers[-1]) 
                 
                 curs.execute(querry)
                 results.append(curs.fetchall())
@@ -1467,14 +1420,15 @@ class media_database_sql:
 
         #now we search for the common attributes - these are all strings!
         for atr in common_selector:
-            s, mode = parse_input(special_selector[atr])
+            s, mode = self.parse_input(common_selector[atr])
 
             """
                 Example:
                 SELECT 
-                    mediaID, path
-                FROM MediaEntries 
-                    INNER JOIN ActorMedia ON ActorMedia.actorMediaID = MediaEntries.MediaID
+                    MediaEntries.mediaID, MediaEntries.path
+                FROM 
+                    MediaEntries 
+                    INNER JOIN ActorMedia ON ActorMedia.actorMediaID = MediaEntries.mediaID
                     INNER JOIN Attribute_Actor ON ActorMedia.actorID = Attribut_Actor.actorID 
                 WHERE path = ?
                  
@@ -1484,8 +1438,10 @@ class media_database_sql:
             column = atr.lower() + 'ID'
             join_c = atr.lower() + 'MediaID'
             querry = """
-                        SELECT mediaID, path FROM MediaEntries
-                            INNER JOIN {} ON {}.{} = MediaEntries.MediaID
+                        SELECT 
+                            MediaEntries.mediaID, MediaEntries.path 
+                        FROM MediaEntries
+                            INNER JOIN {} ON {}.{} = MediaEntries.mediaID
                             INNER JOIN {} ON {}.{} = {}.{}
                         WHERE
                      """.format(join_t,join_t,join_c,attr_t,join_t,column,attr_t,column)
@@ -1493,9 +1449,9 @@ class media_database_sql:
             if mode == 'GLOBAL':
                 mode = global_mode
                 
-            querry += '\n'.join(['    {} LIKE {!r} {}'.format(atr,t,mode) for t in s[:-1]])
-            querry += '\n    {} LIKE {!r};'.format(atr,s[-1])
-            
+            querry += '\n'.join(['    name LIKE {!r} {}'.format(t,mode) for t in s[:-1]])
+            querry += '\n    name LIKE {!r};'.format(s[-1])
+            print querry
             curs.execute(querry)
             results.append(curs.fetchall())
 
@@ -1513,16 +1469,17 @@ class media_database_sql:
         elif global_mode == 'AND':
             res = results[0]
             for check in results[1:]:
-                res = [list(filter(lambda x: x in check, r)) for r in res]
+                res = filter(lambda x: x in check, res) 
         else:
             raise NotImplementedError('unknown selector mode')
-            
+        
         res = [ r[1] for r in res]
+        res = sorted(res)
         
         curs.close()
         return res 
     
-    def parse_input(self,string):
+    def parse_input(self,string,like_prep=True):
         """
             separate the input string into its words
             where double quotes can define words with 
@@ -1531,9 +1488,10 @@ class media_database_sql:
             a single quote will convert the rest 
             of the string into a single word
             
-            we also used this to sanitize the strings (escape characters)
-            and to include '%' at the beginning and end of each word 
-            to enable 'LIKE' searches
+            like_prep == True:
+                we also used this to sanitize the strings (escape characters)
+                and to include '%' at the beginning and end of each word 
+                to enable 'LIKE' searches
             
             if the first word is 'AND' or 'OR'
             we will perform the search for this specific 
@@ -1560,8 +1518,15 @@ class media_database_sql:
         else:
             mode = 'GLOBAL'
         
-        for i,q in enumerate(querry):
-            querry[i] = '%'+q+'%'
+        while True:
+            try:
+                querry.remove('')
+            except:
+                break
+        
+        if like_prep:
+            for i,q in enumerate(querry):
+                querry[i] = '%'+q+'%'
             
         return querry, mode
     
@@ -1571,7 +1536,7 @@ class media_database_sql:
             for ints and floats 
         """
         
-        if string.startswith(['<=','>=']):
+        if string.startswith(('<=','>=')):
             operator = string[:2]
             try:
                 number = string[2:]
@@ -1580,7 +1545,7 @@ class media_database_sql:
                       Warning no number associated with this operator. 
                       Do not leave spaces inbetween operator and number in search bar!
                       """
-        elif string.startswith(['<','>','=']):
+        elif string.startswith(('<','>','=')):
             operator = string[:1]
             try:
                 number = string[1:]
