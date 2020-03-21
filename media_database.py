@@ -1057,7 +1057,11 @@ class media_database_sql:
             # path is already sanitized
             curs.execute(querry,[path])
             res = curs.fetchall()
-            attribs[a] = [i[0] for i in res]
+            # we want to avoid adding empty attributes that are 
+            # usually not connected with a type here 
+            # the creator function takes care of typical attributes
+            if len(res) > 0:
+                attribs[a] = [i[0] for i in res]
         
         curs.close()
         
@@ -1347,115 +1351,36 @@ class media_database_sql:
         #first we make a querry on the global attributes stored in the main media table 
         for atr in global_selector:            
             isstring = self.is_string_attrib(atr,cursor=curs)
-            s, mode = self.parse_input(global_selector[atr],like_prep=isstring)
-            
-            querry = """
-                        SELECT mediaID, path FROM MediaEntries WHERE
-                     """
+            s, mode = self.parse_input(global_selector[atr],like_prep=isstring)            
             if mode == 'GLOBAL':
                     mode = global_mode
-                    
-            if isstring:
-                querry += '\n'.join(['    {} LIKE {!r} {}'.format(atr,t,mode) for t in s[:-1]])
-                querry += '\n    {} LIKE {!r};'.format(atr,s[-1])
-            else:
-                operators = []
-                numbers = []
-                for n in s:
-                    op,num = self.get_math_operator(n)
-                    operators.append(op)
-                    numbers.append(num)
-                    
-                querry += '\n'.join(
-                        ['    {} {} {} {}'.format(atr,o,n,mode) 
-                            for o,n in zip(operators[:-1],numbers[:-1])
-                        ]
-                    )
-                querry += '\n    {} {} {};'.format(atr,operators[-1],numbers[-1]) 
-            
-            curs.execute(querry)
-            results.append(curs.fetchall())
+            buf = self.execute_selector(curs,self.generate_global_attribute_querry,
+                                        atr,s,mode,None,isstring)                
+            results.append(buf)
             
             
         #now we search for the special attributes 
         #those are located in the type tables  
         for atr in special_selector:
             tables = self.get_associated_tables(atr,cursor=curs)
-            isstring = self.is_string_attrib(atr,cursor=curs)
-            
+            isstring = self.is_string_attrib(atr,cursor=curs)            
             for t in tables:
-                s, mode = self.parse_input(special_selector[atr],like_prep=isstring)
-                
-                querry = """
-                            SELECT 
-                                MediaEntries.mediaID, MediaEntries.path 
-                            FROM 
-                                MediaEntries
-                                INNER JOIN {} ON {}.mediaID = MediaEntries.mediaID
-                            WHERE
-                         """.format(t,t)
-                         
+                s, mode = self.parse_input(special_selector[atr],like_prep=isstring)                
                 if mode == 'GLOBAL':
-                    mode = global_mode
-                    
-                if isstring:
-                    querry += '\n'.join(['    {} LIKE {!r} {}'.format(atr,t,mode) for t in s[:-1]])
-                    querry += '\n    {} LIKE {!r};'.format(atr,s[-1])
-                else:
-                    operators = []
-                    numbers = []
-                    for n in s:
-                        op,num = self.get_math_operator(n)
-                        operators.append(op)
-                        numbers.append(num)
-                    
-                    querry += '\n'.join(
-                            ['    {} {} {} {}'.format(atr,o,n,mode) 
-                                for o,n in zip(operators[:-1],numbers[:-1])
-                            ]
-                        )
-                    querry += '\n    {} {} {};'.format(atr,operators[-1],numbers[-1]) 
-                
-                curs.execute(querry)
-                results.append(curs.fetchall())
+                    mode = global_mode                
+                buf = self.execute_selector(curs,self.generate_special_attribute_querry,
+                                            atr,s,mode,t,isstring)                    
+                results.append(buf)
 
 
         #now we search for the common attributes - these are all strings!
         for atr in common_selector:
             s, mode = self.parse_input(common_selector[atr])
-
-            """
-                Example:
-                SELECT 
-                    MediaEntries.mediaID, MediaEntries.path
-                FROM 
-                    MediaEntries 
-                    INNER JOIN ActorMedia ON ActorMedia.actorMediaID = MediaEntries.mediaID
-                    INNER JOIN Attribute_Actor ON ActorMedia.actorID = Attribut_Actor.actorID 
-                WHERE path = ?
-                 
-            """              
-            join_t = atr + 'Media'
-            attr_t = 'Attribute_' + atr
-            column = atr.lower() + 'ID'
-            join_c = atr.lower() + 'MediaID'
-            querry = """
-                        SELECT 
-                            MediaEntries.mediaID, MediaEntries.path 
-                        FROM MediaEntries
-                            INNER JOIN {} ON {}.{} = MediaEntries.mediaID
-                            INNER JOIN {} ON {}.{} = {}.{}
-                        WHERE
-                     """.format(join_t,join_t,join_c,attr_t,join_t,column,attr_t,column)
-
             if mode == 'GLOBAL':
-                mode = global_mode
-                
-            querry += '\n'.join(['    name LIKE {!r} {}'.format(t,mode) for t in s[:-1]])
-            querry += '\n    name LIKE {!r};'.format(s[-1])
-            print querry
-            curs.execute(querry)
-            results.append(curs.fetchall())
+                mode = global_mode            
+            buf = self.execute_selector(curs,self.generate_common_attribute_querry,
+                                        atr,s,mode,None,True)
+            results.append(buf)
 
         if len(results) == 0:
             querry = """
@@ -1467,7 +1392,6 @@ class media_database_sql:
             res = []
             for r in results:
                 res += r
-            res = list(set(res))
         elif global_mode == 'AND':
             res = results[0]
             for check in results[1:]:
@@ -1476,11 +1400,141 @@ class media_database_sql:
             raise NotImplementedError('unknown selector mode')
         
         res = [ r[1] for r in res]
-        res = sorted(res)
+        res = sorted(set(res))
         
         curs.close()
         return res 
+
+    def execute_selector(self,cursor,generator,attribute,words,mode,table,isstring):
+        """
+            execute the logic of the selector based on the mode and attribute type
+
+            cursor: cursor to the database
+            generator: generator function for the querry
+            attribute: the name of the attribute
+            words: list of words 
+            mode: the mode of filtering ('AND' or 'OR')
+            table: the name of the table (only really needed for special attributes)
+            issting: is the attribute a string type?             
+        """
+
+        if mode == 'AND' and isstring:
+            res = []
+            for w in words:
+                w = [w]
+                querry = generator(attribute,table,w,mode,isstring) 
+                cursor.execute(querry)
+                res.append(cursor.fetchall())
+            
+            buf = res[0]
+            for check in res[1:]:
+                buf = filter(lambda x: x in check, buf)
+        else:
+            querry = generator(attribute,table,words,mode,isstring) 
+            cursor.execute(querry)
+            buf = cursor.fetchall()
+        
+        return buf 
+
     
+    def generate_global_attribute_querry(self,attribute,table,words,mode,isstring):
+        """
+            create the querry to match with a global attribute 
+        """
+
+        querry = """
+                    SELECT mediaID, path FROM MediaEntries WHERE
+                 """
+                
+        if isstring:
+            if len(words) > 1:
+                querry += '\n'.join(['    {} LIKE {!r} {}'.format(attribute,w,mode) for w in words[:-1]])
+            querry += '\n    {} LIKE {!r};'.format(attribute,words[-1])
+        else:
+            operators = []
+            numbers = []
+            for n in words:
+                op,num = self.get_math_operator(n)
+                operators.append(op)
+                numbers.append(num)
+                
+            if len(words) > 1:
+                querry += '\n'.join(
+                    ['    {} {} {} {}'.format(attribute,o,n,mode) 
+                        for o,n in zip(operators[:-1],numbers[:-1])
+                    ]
+                    )
+            querry += '\n    {} {} {};'.format(attribute,operators[-1],numbers[-1]) 
+
+        return querry
+
+    def generate_common_attribute_querry(self,attribute,table,words,mode,isstring):
+        """
+            create the querry to match with a common attribute 
+
+            Example:
+            SELECT 
+                MediaEntries.mediaID, MediaEntries.path
+            FROM 
+                MediaEntries 
+                INNER JOIN ActorMedia ON ActorMedia.actorMediaID = MediaEntries.mediaID
+                INNER JOIN Attribute_Actor ON ActorMedia.actorID = Attribute_Actor.actorID 
+            WHERE path = ?
+                 
+        """              
+        join_t = attribute + 'Media'
+        attr_t = 'Attribute_' + attribute
+        column = attribute.lower() + 'ID'
+        join_c = attribute.lower() + 'MediaID'
+        querry = """
+                    SELECT 
+                        MediaEntries.mediaID, MediaEntries.path 
+                    FROM MediaEntries
+                        INNER JOIN {} ON {}.{} = MediaEntries.mediaID
+                        INNER JOIN {} ON {}.{} = {}.{}
+                    WHERE
+                 """.format(join_t,join_t,join_c,attr_t,join_t,column,attr_t,column)
+        if len(words) > 1:    
+            querry += '\n'.join(['    name LIKE {!r} {}'.format(w,mode) for w in words[:-1]])
+        querry += '\n    name LIKE {!r};'.format(words[-1])
+        
+        return querry
+    
+    def generate_special_attribute_querry(self,attribute,table,words,mode,isstring):
+        """
+            create the querry to match with a special attribute 
+        """
+        querry = """
+                    SELECT 
+                        MediaEntries.mediaID, MediaEntries.path 
+                    FROM 
+                        MediaEntries
+                        INNER JOIN {} ON {}.mediaID = MediaEntries.mediaID
+                    WHERE
+                 """.format(table,table)
+                                     
+        if isstring:
+            if len(words) > 1:
+                querry += '\n'.join(['    {} LIKE {!r} {}'.format(attribute,w,mode) for w in words[:-1]])
+            querry += '\n    {} LIKE {!r};'.format(attribute,words[-1])
+        else:
+            operators = []
+            numbers = []
+            for n in words:
+                op,num = self.get_math_operator(n)
+                operators.append(op)
+                numbers.append(num)
+            
+            if len(words) > 1:
+                querry += '\n'.join(
+                    ['    {} {} {} {}'.format(attribute,o,n,mode) 
+                        for o,n in zip(operators[:-1],numbers[:-1])
+                    ]
+                    )
+            querry += '\n    {} {} {};'.format(attribute,operators[-1],numbers[-1]) 
+
+        return querry
+        
     def parse_input(self,string,like_prep=True):
         """
             separate the input string into its words
