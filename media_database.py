@@ -871,16 +871,16 @@ class media_database_sql:
         else:
             curs = cursor
 
-        # determine if the media type was changed
+        # determine if the media type was changed and get the mediaID
         p = self.sanitize_querry(path)
-        curs.execute("""SELECT type 
+        curs.execute("""SELECT MediaID,type 
                     FROM MediaEntries 
                     WHERE
                         path = ? ;""",
                     [p])
-        otype = curs.fetchone()[0]
+        mediaid,otype = curs.fetchone()
         typechange = otype.__ne__(typ)
-
+                
         # update the entry in the main MediaEntryDB:
         curs.execute("""UPDATE MediaEntries 
                     SET 
@@ -891,7 +891,6 @@ class media_database_sql:
                         path = ? ;""",
                   (typ,style,played,p))
         
-        mediaid = curs.lastrowid
         
         # delete old entries in the attrib join tables 
         # if we change the type we also change the reference id in 
@@ -899,13 +898,16 @@ class media_database_sql:
         # entries in the join tables     
         if typechange or update_attrib:
             for a in supported_attribs:
-                if len(a) != 2:
+                tables = supported_attribs[a]
+                if len(tables) != 2:
                     continue
+                idcolumn = tables[1][0].lower() + tables[1][1:] + 'ID'
+                
                 querry = """
                             DELETE 
                             FROM {} 
-                            WHERE mediaID = ? ;
-                        """.format(a[1])
+                            WHERE {} = ? ;
+                        """.format(tables[1],idcolumn)
                 params = [mediaid] 
                 curs.execute(querry,params)
                 
