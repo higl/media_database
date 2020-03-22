@@ -6,6 +6,7 @@ import cv2
 from media_entry import *
 import pickle
 from time import time
+import numpy as np
 mswindows = (sys.platform == "win32")
 
 if mswindows:
@@ -439,7 +440,7 @@ class media_database_sql:
             (mediaID integer primary key,
              path text, 
              type text, 
-             style integer, 
+             style text, 
              played integer)
             ''')
         c.execute('''CREATE UNIQUE INDEX path
@@ -1767,6 +1768,7 @@ class media_database_sql:
             returns statistics about the attributes 
             used in all the media entries of the database
         """
+        curs = self.connection.cursor()
         stat = {}
         
         special_attribs = self.get_attribute_list(cursor=curs,common=False,special=True,global_atr=False)
@@ -1775,18 +1777,18 @@ class media_database_sql:
         
         #global attribs are all in the MediaEntries table
         global_attribs.remove('path')   #unique attribute, no need for stats
-        global_attribs.remove('MediaID')#unique attribute, no need for stats
+        global_attribs.remove('mediaID')#unique attribute, no need for stats
 
         querry = """ SELECT """
         if len(global_attribs) > 1:
             querry += '\n'.join([' {}, '.format(attribute) for attribute in global_attribs[:-1]])
-        querry += '{} \n'.format(global_attribs[:-1])
+        querry += '{} \n'.format(global_attribs[-1])
         querry += """FROM MediaEntries ;"""
         
         curs.execute(querry)
         res = curs.fetchall()
         for i,attribute in enumerate(global_attribs):
-            isstring = self.is_string_attrib(attribute)            
+            isstring = self.is_string_attrib(attribute)   
             buf = [r[i] for r in res]
             stat[attribute] = self.querry_statistics(buf,isstring)
          
@@ -1804,19 +1806,31 @@ class media_database_sql:
         #common attributes 
         for attribute in common_attribs:
             isstring = True
-            table = attr_t = 'Attribute_' + attribute             
-            querry = """ SELECT name FROM {};""".format(table)
+            attr_t = 'Attribute_' + attribute  
+            join_t = attribute + 'Media'
+            column = attribute.lower() + 'ID'
+            querry = """
+                    SELECT 
+                        name 
+                    FROM {}
+                        INNER JOIN {} ON {}.{} = {}.{}
+                    """.format(join_t,attr_t,join_t,column,attr_t,column)
             curs.execute(querry)
             res = curs.fetchall()
             buf = [r[0] for r in res]
             stat[attribute] = self.querry_statistics(buf,isstring)
-            
+        
+        curs.close()
         return stat
 
-    def querry_statistics(self,buf,isstring)
-        import numpy as np
-
+    def querry_statistics(self,buf,isstring):
+        """
+           Analyse the result of a querry and return some statistics about it
+        """
         result = {}
+        if len(buf) == 0:
+            return result
+            
         if isstring:
             unique = set(buf)
             for u in unique:
@@ -1825,14 +1839,14 @@ class media_database_sql:
             array = np.array(buf)
             max = np.max(array)
             min = np.min(array)
-            if max == 1 and min == 0: #we assume this is boolean
+            if (max == 1 and min == 0) or (min == max and min in [0,1]): #we assume this is boolean
                 result['True'] = np.sum(array)
                 result['False'] = len(array) - result['True']
             else:
-                bins = numpy.linspace(min, max+1, 11)
-                digitized = numpy.digitize(array, bins)
+                bins = np.linspace(min, max+1, 11)
+                digitized = np.digitize(array, bins)
                 for e in np.arange(1,11):
-                    str = '{} - {}'.format{bins[e-1],bins[e]}
+                    str = '{} - {}'.format(bins[e-1],bins[e])
                     result[str] = len(array[digitized == e])
             
         return result
