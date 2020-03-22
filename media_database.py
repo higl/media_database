@@ -1327,8 +1327,9 @@ class media_database_sql:
         
         curs = self.connection.cursor()
         
-        special_attribs = self.get_attribute_list(cursor=curs,common=False,special=True)
-        common_attribs = self.get_attribute_list(cursor=curs,common=True,special=False)
+        special_attribs = self.get_attribute_list(cursor=curs,common=False,special=True,global_atr=False)
+        common_attribs = self.get_attribute_list(cursor=curs,common=True,special=False,global_atr=False)
+        global_attribs = self.get_attribute_list(cursor=curs,common=False,special=False,global_atr=True)
         
         global_selector = {}
         special_selector = {}
@@ -1336,7 +1337,7 @@ class media_database_sql:
         
         keys = kwargs.keys()
         for k in keys:
-            if k in ['type','path','style','played']:
+            if k in global_attribs:
                 global_selector[k] = kwargs[k]
             elif k in special_attribs:
                 special_selector[k] = kwargs[k]
@@ -1638,7 +1639,7 @@ class media_database_sql:
                 
         return type_names
         
-    def get_attribute_list(self,typ=None,cursor=None,common=True,special=True):
+    def get_attribute_list(self,typ=None,cursor=None,common=True,special=True,global_atr=True):
         """returns a list of all possible attributes of either the whole database (type==None)
            or of a specific media type (type=="type")
         """
@@ -1651,6 +1652,11 @@ class media_database_sql:
             curs = cursor
         
         attribs = []
+        #global attributes are the column names of the MediaEntries table
+        if global_atr:
+            for row in curs.execute("pragma table_info('MediaEntries')").fetchall():
+                attribs.append(row[1])
+                    
         #common attributes can be found over their repective tables
         if common:
             curs.execute("""
@@ -1760,9 +1766,78 @@ class media_database_sql:
             \TODO this needs to be reimplemented for sql
             returns statistics about the attributes 
             used in all the media entries of the database
-        """        
-        return None
-    
+        """
+        stat = {}
+        
+        special_attribs = self.get_attribute_list(cursor=curs,common=False,special=True,global_atr=False)
+        common_attribs = self.get_attribute_list(cursor=curs,common=True,special=False,global_atr=False)
+        global_attribs = self.get_attribute_list(cursor=curs,common=False,special=False,global_atr=True)
+        
+        #global attribs are all in the MediaEntries table
+        global_attribs.remove('path')   #unique attribute, no need for stats
+        global_attribs.remove('MediaID')#unique attribute, no need for stats
+
+        querry = """ SELECT """
+        if len(global_attribs) > 1:
+            querry += '\n'.join([' {}, '.format(attribute) for attribute in global_attribs[:-1]])
+        querry += '{} \n'.format(global_attribs[:-1])
+        querry += """FROM MediaEntries ;"""
+        
+        curs.execute(querry)
+        res = curs.fetchall()
+        for i,attribute in enumerate(global_attribs):
+            isstring = self.is_string_attrib(attribute)            
+            buf = [r[i] for r in res]
+            stat[attribute] = self.querry_statistics(buf,isstring)
+         
+        #special attributes 
+        for attribute in special_attribs:
+            isstring = self.is_string_attrib(attribute)
+            tables = self.get_associated_tables(attribute,cursor=curs)
+            for t in tables:
+                querry = """ SELECT {} FROM {};""".format(attribute,t)
+                curs.execute(querry)
+                res = curs.fetchall()
+                buf = [r[0] for r in res]
+                stat[attribute] = self.querry_statistics(buf,isstring)
+
+        #common attributes 
+        for attribute in common_attribs:
+            isstring = True
+            table = attr_t = 'Attribute_' + attribute             
+            querry = """ SELECT name FROM {};""".format(table)
+            curs.execute(querry)
+            res = curs.fetchall()
+            buf = [r[0] for r in res]
+            stat[attribute] = self.querry_statistics(buf,isstring)
+            
+        return stat
+
+    def querry_statistics(self,buf,isstring)
+        import numpy as np
+
+        result = {}
+        if isstring:
+            unique = set(buf)
+            for u in unique:
+                result[u] = buf.count(u)
+        else:
+            array = np.array(buf)
+            max = np.max(array)
+            min = np.min(array)
+            if max == 1 and min == 0: #we assume this is boolean
+                result['True'] = np.sum(array)
+                result['False'] = len(array) - result['True']
+            else:
+                bins = numpy.linspace(min, max+1, 11)
+                digitized = numpy.digitize(array, bins)
+                for e in np.arange(1,11):
+                    str = '{} - {}'.format{bins[e-1],bins[e]}
+                    result[str] = len(array[digitized == e])
+            
+        return result
+        
+        
     def get_entry_count(self):
         """
             how many media entries do we have?
