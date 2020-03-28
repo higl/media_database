@@ -164,7 +164,7 @@ class Application(tk.Tk):
         # if the given database already agrees with the expected database structure
         # then legacy load will try to extend the given database with the data from
         # the pickle file
-        self.media_database = mdb.media_database(path,
+        self.media_database = mdb.media_database_sql(path,
                                                  parent,
                                                  force_update=self.forceUpdate.get(),
                                                  legacy_load=self.legacyLoad.get()
@@ -371,8 +371,10 @@ class SelectorFrame(tk.Frame):
         if master == None or master.media_database == None:
             self.attribs = ['attribute 1','attribute 2','attribute 3','attribute 4']
         else:
-            self.attribs = self.master.media_database.alist.keys()
-            self.attribs.append('-')
+            self.attribs = self.master.media_database.get_attribute_list(                   common=True,
+                               special=True,
+                               global_atr=True
+                            )
             if len(self.attribs) < 4:
                 att = ['-','-','-','-']
                 att[:len(self.attribs)-1] = self.attribs[:]
@@ -413,10 +415,10 @@ class SelectorFrame(tk.Frame):
         for e,i in enumerate(self.LabelList):
             var = self.VarList[e].get()
             uString = self.EntryList[e].get()
-            uString = mdb_util.updateString(uString)
+            #uString = mdb_util.updateString(uString)
             if var == '-' or len(uString) == 0:
                 continue
-            args[self.VarList[e].get()] = uString
+            args[var] = uString
         return args
     
     def update(self):
@@ -428,7 +430,11 @@ class SelectorFrame(tk.Frame):
         if self.master == None or self.master.media_database == None:
             self.attribs = ['attribute 1','attribute 2','attribute 3','attribute 4']
         else:    
-            self.attribs = self.master.media_database.alist.keys()
+            self.attribs = self.master.media_database.get_attribute_list(
+                            common=True,
+                            special=True,
+                            global_atr=True
+                           )
             self.attribs.append('-')
             if len(self.attribs) < 4:
                 att = ['-','-','-','-']
@@ -527,7 +533,8 @@ class InfoFrame(tk.Frame):
                     nLabel.grid(row=r,column=c)
                     self.LabelList.append(nLabel)
                     
-                    eString = mdb_util.displayString(e.attrib[i])
+                    slist = [str(w) for w in e.attrib[i]]
+                    eString = mdb_util.displayString(slist)
                     nEntry = tk.Entry(self)
                     nEntry.insert(0,eString)
                     nEntry.grid(row=r,column=c+1,columnspan=5,**options)
@@ -549,7 +556,8 @@ class InfoFrame(tk.Frame):
                     newLabel = tk.OptionMenu(self,newVar,*e.attrib.keys(),command=self.updateEntry)
                     newLabel.grid(row=r,column=c,**options)
                     
-                    eString = mdb_util.displayString(e.attrib[i])
+                    slist = [str(w) for w in e.attrib[i]]
+                    eString = mdb_util.displayString(slist)
                     newEntry = tk.Entry(self)
                     newEntry.insert(0,eString)                
                     newEntry.grid(row=r,column=c+1,columnspan=5,**options)
@@ -571,7 +579,8 @@ class InfoFrame(tk.Frame):
         i = self.LabelList.index(w)
         self.EntryList[i].delete(0,tk.END)
         a = self.VarList[i].get()
-        eString = mdb_util.displayString(self.entry.attrib[a])
+        slist = [str(w) for w in self.entry.attrib[i]]
+        eString = mdb_util.displayString(slist)
         self.EntryList[i].insert(0,eString)
         
     def clearLists(self):
@@ -728,7 +737,8 @@ class InfoWindow(tk.Toplevel):
             nLabel.grid(row=r,column=1)
             self.LabelList.append(nLabel)
             
-            eString = mdb_util.displayString(self.entry.attrib[i])
+            slist = [str(w) for w in self.entry.attrib[i]]
+            eString = mdb_util.displayString(slist)                    
             nEntry = tk.Entry(self)
             nEntry.insert(0,eString)
             nEntry.grid(row=r,column=2,columnspan=5)
@@ -759,7 +769,7 @@ class InfoWindow(tk.Toplevel):
             exchange the current media entry with a new one
             checks if the current one has been modified first and warns accordingly
         """
-        if self.changedInfo():
+        if self.changedInfo()[0]:
             if tkMessageBox.askokcancel("Update Info","Entries have been updated. Do you want to save first?"):
                 self.updateEntry()
         if entry != None:
@@ -774,15 +784,13 @@ class InfoWindow(tk.Toplevel):
             update the attribute entries in the current media entry
         """
         
-        attrib = {}
-        for e,i in enumerate(self.LabelList):
-            uString = self.EntryList[e].get()
-            uString = mdb_util.updateString(uString)
-            attrib[i.cget('text')] = uString
+        changed, attrib = self.changedInfo()
         
-        self.entry.update_attrib(**attrib)
-        self.status = 'update'
-        
+        if changed:
+            self.entry.update_attrib(**attrib)
+            db = self.master.media_database
+            db.update_entry(self,entry,update_attrib=True)
+            self.status = 'update'
     
     def delete(self,event):
         """
@@ -802,12 +810,16 @@ class InfoWindow(tk.Toplevel):
         """
         attrib = {}
         for e,i in enumerate(self.LabelList):
+            name = i.cget('text')
             uString = self.EntryList[e].get()
             uString = mdb_util.updateString(uString)
-            attrib[i.cget('text')] = uString
+            if len(self.entry.attrib[name])>0:
+                ttype = type(self.entry.attrib[name][0])
+                uString = [ttype(w) for w in uString]         
+            attrib[name] = uString
             if len(uString) == 0:
                 continue
-        return not self.entry.match_selection(**attrib)
+        return not self.entry.match_selection(**attrib), attrib
         
  
     def checkStatus(self):
