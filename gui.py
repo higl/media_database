@@ -207,14 +207,22 @@ class Application(tk.Tk):
             only the currently selected elements from the database will be considered
         """
         if self.selectionMode.get():
-            self.last = self.media_database.get_random_entry(single=self.singleMode.get(),selection=self.selectionList)
+            self.last = self.media_database.get_random_entry(selection=self.selectionList)
         else:
-            self.last = self.media_database.get_random_entry(single=self.singleMode.get())
+            singleMode = self.singleMode.get()
+            self.last = self.media_database.get_random_entry(single=singleMode)
+            if singleMode and self.last != None:
+                self.last.set_played(True)
+                self.media_database.update_entry(self.last)
+        
+        if self.last == None:
+            print 'WARNING: the selection was empty'
+            return
         self.infobox.update(entry=self.last)
         self.history.append(self.last)  
         if self.historyWindow != None:
             self.historyWindow.fillBox()
-        t = threading.Thread(target=self.last.execute,kwargs={'singleMode':self.singleMode.get()})
+        t = threading.Thread(target=self.last.execute)
         t.setDaemon(True)
         t.start() 
         
@@ -789,7 +797,7 @@ class InfoWindow(tk.Toplevel):
         if changed:
             self.entry.update_attrib(**attrib)
             db = self.master.media_database
-            db.update_entry(self,entry,update_attrib=True)
+            db.update_entry(self.entry,update_attrib=True)
             self.status = 'update'
     
     def delete(self,event):

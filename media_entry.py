@@ -160,8 +160,6 @@ class media_entry:
         """
             checks if the media entry matches a filter, 
             based on type, style, name and attributes 
-        \\TODO check if this works
-        \\TODO add type consideration in the matching process
         """
         if not type == '' and not self.type == type:
             return False
@@ -171,17 +169,34 @@ class media_entry:
             return False
         
         keys = kwargs.keys()
-        for i in keys:
-            if self.attrib.has_key(i):
-                args = makeAttribList(kwargs[i])
-                    
-                match = [False for j in args]
+        
                 
-                for e,j in enumerate(args):
-                    if case_sensitive:
-                        match[e] = any(j in k for k in self.attrib[i])
-                    else:
-                        match[e] = any(j.lower() in k.lower() for k in self.attrib[i])
+        for i in keys:
+            args = makeAttribList(kwargs[i])
+            #filter empty args 
+            if len(args) == 0:
+                continue
+            if self.attrib.has_key(i):
+                orig = self.attrib[i]
+                
+                # len(args) > 0 at this point !
+                if len(orig) == 0:
+                    return False
+                else:
+                    #we overloaded the type function here,
+                    #so we need to use object.__class__ instead
+                    ttype = orig[0].__class__
+                
+                if ttype in (str,unicode):
+                    ttype = basestring
+                if not all([isinstance(w,ttype) for w in args]):
+                    print 'type mismatch in match_selection'
+                    return False
+                if ttype in (str,unicode) and not case_sensitive:
+                    orig = [w.lower for w in orig]
+                    args = [w.lower for w in args]
+                    
+                match = [w in orig for w in args]
                             
                 if not all(match):
                     return False

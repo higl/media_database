@@ -795,6 +795,8 @@ class media_database_sql:
             of the media entries
             - this might get very slow depending on the amount of attributes in the 
             various tables 
+            
+            /TODO redo this, using the attrib stats, so that we can avoid throwing database errors
         """
         attrib_tables = [
                     'Attribute_Actor',
@@ -826,6 +828,10 @@ class media_database_sql:
     def update_entry(self,entry,cursor=None,update_attrib=False):
         """
             This function updates a media_entry in the database.
+            We always update the main table, but everything 
+            in the type and attribute tables is only updated if 
+            we use either update_attrib or if we change the type 
+            of the entry 
         """
         path = entry.get_display_string()
         if not os.path.exists(os.path.join(self.parent,path)):
@@ -1084,6 +1090,8 @@ class media_database_sql:
             selection mode does not add to single mode
         """
         if selection != None:
+            if len(selection) == 0:
+                return None
             return self.create_media_entry_from_db(random.choice(selection))
         elif single:            
             querry = """
@@ -1103,6 +1111,20 @@ class media_database_sql:
         curs = self.connection.cursor()
         curs.execute(querry)
         selection = curs.fetchall()
+        
+        if len(selection) == 0: 
+            if single:
+                print('Congrats you\'ve seen it all')
+                curs.execute(
+                    """UPDATE MediaEntries 
+                       SET 
+                           played = 0 ;
+                    """)
+                curs.fetchall()
+                curs.execute(querry)
+                selection = curs.fetchall()
+            else:
+                selection = [None]
         curs.close()
         
         return self.create_media_entry_from_db(random.choice(selection)[0])
@@ -1176,12 +1198,15 @@ class media_database_sql:
         
         toadd = []
         todelete = []
-        
+
+
+        #filter the db file itself 
+        for i in inlist:
+            if os.path.normcase(os.path.join(self.parent,i)) == self.db_path:
+                inlist.remove(i)
+     
         offset = 0
         for e,i in enumerate(inlist):
-            #skip the db file itself 
-            if os.path.normcase(os.path.join(self.parent,i)) == self.db_path:
-                continue
             while curlist[e+offset] < i:
                 entry = self.create_empty_entry(curlist[e+offset],'unknown')
                 todelete.append(entry)
@@ -1190,7 +1215,7 @@ class media_database_sql:
                 entry = self.create_empty_entry(i,'unknown')
                 toadd.append(entry)
                 offset = offset - 1
-               
+
         if len(toadd) > 0:
             self.add_entries(toadd)
         if len(todelete) > 0:
@@ -1843,10 +1868,10 @@ class media_database_sql:
                 result['True'] = np.sum(array)
                 result['False'] = len(array) - result['True']
             else:
-                bins = np.linspace(min, max+1, 11)
+                bins = np.linspace(min, max+1, 11,dtype=array.dtype)
                 digitized = np.digitize(array, bins)
                 for e in np.arange(1,11):
-                    str = '{} - {}'.format(bins[e-1],bins[e])
+                    str = '{:.1g} - {:.1g}'.format(bins[e-1],bins[e])
                     result[str] = len(array[digitized == e])
             
         return result

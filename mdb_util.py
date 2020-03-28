@@ -48,6 +48,8 @@ def ensureStringList(lis):
 
 def makeAttribList(lis):
     lis = ensureList(lis)
+    if len(lis) == 0:
+        return lis
     ttype = type(lis[0])
     #handling of strings:
     if ttype in (str,unicode):
