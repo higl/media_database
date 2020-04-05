@@ -1791,7 +1791,6 @@ class media_database_sql:
     
     def get_attrib_stat(self):
         """
-            \TODO this needs to be reimplemented for sql
             returns statistics about the attributes 
             used in all the media entries of the database
         """
@@ -1854,28 +1853,29 @@ class media_database_sql:
         """
            Analyse the result of a querry and return some statistics about it
         """
-        result = {}
+        result = []
         if len(buf) == 0:
             return result
             
         if isstring:
             unique = set(buf)
             for u in unique:
-                result[u] = buf.count(u)
+                result.append([u,buf.count(u)])
+            result = sorted(result, key=lambda x: x[1], reverse=True)
         else:
             array = np.array(buf)
             max = np.max(array)
             min = np.min(array)
             if (max == 1 and min == 0) or (min == max and min in [0,1]): #we assume this is boolean
-                result['True'] = np.sum(array)
-                result['False'] = len(array) - result['True']
+                ntrue = np.sum(array)
+                result.append(['True',ntrue]) 
+                result.append(['False',len(array) - ntrue])
             else:
                 bins = np.linspace(min, max+1, 11,dtype=array.dtype)
                 digitized = np.digitize(array, bins)
-                for e in np.arange(1,11):
-                    str = '{:.1g} - {:.1g}'.format(bins[e-1],bins[e])
-                    result[str] = len(array[digitized == e])
-            
+                for e in np.arange(10,0,-1): #reverse of arange(1,11)
+                    str = '{:.4g} - {:.4g}'.format(bins[e-1],bins[e])
+                    result.append([str,len(array[digitized == e])])   
         return result
         
         

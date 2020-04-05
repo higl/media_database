@@ -903,10 +903,10 @@ class StatisticsWindow(tk.Toplevel):
         """
         s = self.attribList.curselection()
         s = self.attrib.keys()[s[0]]
-        sort = sorted(self.attrib[s].items(), key=lambda x: x[1], reverse=True)
-        
+        results = self.attrib[s]
+
         self.statList.delete(0,tk.END)
-        for i in sort:
+        for i in results:
             self.statList.insert(tk.END,'{:<25}{:>5}'.format(i[0],str(i[1])))
 
 
