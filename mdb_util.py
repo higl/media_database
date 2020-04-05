@@ -1,4 +1,6 @@
 import os
+import sys
+encoding = sys.getfilesystemencoding()
 
 def rm_empty_folders(path):
     """
@@ -17,7 +19,7 @@ def updateString(s):
         takes a string and splits it up into single attributes (separeted by comma),
         that can be added to a media entry 
     """
-    tmpstr = s.split(',')
+    tmpstr = s.split(u',')
     tmpstr = list(map(lambda x: x.lstrip(),tmpstr))
     tmpstr = list(map(lambda x: x.rstrip(),tmpstr)) 
     tmpstr = filter(lambda x: x != '', tmpstr)
@@ -30,10 +32,10 @@ def displayString(s):
     """
     tmpstr = ''
     for i in s:
-        tmpstr = tmpstr + ' , ' + i
+        tmpstr = tmpstr + u' , ' + i
     
-    tmpstr = tmpstr.lstrip(' , ')    
-    tmpstr = tmpstr.rstrip(' , ')
+    tmpstr = tmpstr.lstrip(u' , ')    
+    tmpstr = tmpstr.rstrip(u' , ')
     return tmpstr
     
 def ensureList(lis):
@@ -43,7 +45,7 @@ def ensureList(lis):
 
 def ensureStringList(lis):
     lis = ensureList(lis)    
-    lis = [str(i) for i in lis]
+    lis = [ensureUnicode(i) for i in lis]
     return lis
 
 def makeAttribList(lis):
@@ -53,8 +55,16 @@ def makeAttribList(lis):
     ttype = type(lis[0])
     #handling of strings:
     if ttype in (str,unicode):
-        ttype = basestring
+        lis = ensureStringList(lis) # this converts to unicode
+        ttype = unicode
     if not all([isinstance(i,ttype) for i in lis]):
         raise TypeError('Entries in Attribute Lists all need to have the same datatype!')
     
     return lis
+
+def ensureUnicode(string):
+    if type(string) == unicode:
+        return string
+    else:
+        return unicode(string,encoding)
+        

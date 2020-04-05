@@ -3,7 +3,8 @@ import random
 import sys
 import cv2
 mswindows = (sys.platform == "win32")
-from mdb_util import ensureStringList, ensureList, makeAttribList 
+encoding = sys.getfilesystemencoding()
+from mdb_util import *
 
 if mswindows:
     from subprocess import list2cmdline
@@ -21,9 +22,9 @@ class media_entry:
         a folder containing a certain type of media
     """
     def __init__(self,path, type='unknown',style='random', played=False, format=()):
-        self.path = path 
-        self.type = type
-        self.style = style
+        self.path = ensureUnicode(path) 
+        self.type = ensureUnicode(type)
+        self.style = ensureUnicode(style)
         self.played = played
         self.accepted_format = format
         self.filepath = self._determine_files_(self.path,self.style,self.accepted_format)
@@ -53,9 +54,9 @@ class media_entry:
             folderList = [path]
         elif len(format)==0 or path.lower().endswith(format):
             fileList.append(path)
-            return fileList
+            return ensureStringList(fileList)
         else:
-            return ['']
+            return [u'']
             #raise NoExecutableFileFoundException
             
         while len(folderList)>0:
@@ -67,18 +68,18 @@ class media_entry:
                 elif len(format)==0 or p.lower().endswith(format):
                     fileList.append(p)
                     if style=='first':
-                        return fileList
+                        return ensureStringList(fileList)
           
             folderList.pop(0)
             
-        fileList = sorted(fileList)
+        fileList = sorted(ensureStringList(fileList))
         if len(fileList)==0:
-            return ['']
+            return [u'']
             #raise NoExecutableFileFoundException
         elif style=='last':
             return [fileList[-1]]
         else:
-            return sorted(fileList)
+            return fileList
     
     def add_attrib(self,**kwargs):
         """
@@ -169,7 +170,6 @@ class media_entry:
             return False
         
         keys = kwargs.keys()
-        
                 
         for i in keys:
             args = makeAttribList(kwargs[i])
@@ -280,6 +280,7 @@ class video_entry(media_entry):
         self.attrib['genre'] = ensureStringList(genre)
         length = 0.0
         for f in self.filepath:
+            f = f.encode(encoding)
             v=cv2.VideoCapture(f)
             v.set(cv2.CAP_PROP_POS_AVI_RATIO,1)
             length = length + v.get(cv2.CAP_PROP_POS_MSEC)

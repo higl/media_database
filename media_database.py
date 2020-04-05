@@ -1,9 +1,11 @@
 import os
 import random
 import sys
+encoding = sys.getfilesystemencoding()
 import sqlite3
 import cv2
 from media_entry import *
+from mdb_util import *
 import pickle
 from time import time
 import numpy as np
@@ -28,7 +30,7 @@ class media_database:
     """
     import os
     import pickle
-    #//TODO convert strings into raw strings
+    #//TODO convert strings into unicode strings
     #//TODO make dlist a numpy array and then use the masking function for the reduced "unplayed" list in get_random_entry
     
     
@@ -388,17 +390,17 @@ class media_database_sql:
         """ Initialize a database connection. Create the database first if no other file is given.        
         """       
         
-        self.parent = os.path.normpath(parent)
+        self.parent = os.path.normpath(ensureUnicode(parent))
         self.parent = os.path.normcase(self.parent)
-        self.db_path = os.path.abspath(d) #this allows us to also store the 
-                                          #db in a relative path 
+        self.db_path = os.path.abspath(ensureUnicode(d)) #this allows us to also store the 
+                                                         #db in a relative path 
         self.db_path = os.path.normcase(self.db_path)
         
-        self.p_style = p_style
-        self.v_style = v_style
-        self.m_style = m_style
-        self.e_style = e_style
-        
+        self.p_style = ensureUnicode(p_style)
+        self.v_style = ensureUnicode(v_style)
+        self.m_style = ensureUnicode(m_style)
+        self.e_style = ensureUnicode(e_style)
+
         if os.path.isfile(self.db_path):
             self.connection = sqlite3.connect(self.db_path)
             self.connection.execute("PRAGMA foreign_keys = 1")
@@ -414,9 +416,8 @@ class media_database_sql:
             self.connection = self._create_db_(self.db_path)
             self.fill()
         
-        if os.path.getmtime(parent) > os.path.getmtime(self.db_path) or force_update:
+        if force_update:
             self.update()
-        return
         
         if legacy_load:
             self.hash = hash(parent)
@@ -630,7 +631,7 @@ class media_database_sql:
                     only supports media entries that are
                     located within 0.th level of the parent directory
                   """
-            raise NotImplementedError
+            #raise NotImplementedError
         typ = new_entry.type
         style = new_entry.style
         played = int(new_entry.played)
@@ -1184,8 +1185,8 @@ class media_database_sql:
             Removes those that are not there anymore and
             adds those that are missing in the database 
         """
-        inlist = os.listdir(self.parent)
-        
+        inlist = [unicode(i,encoding) for i in os.listdir(self.parent)]
+
         curs = self.connection.cursor()
         
         querry = "SELECT path from MediaEntries"
@@ -1204,7 +1205,9 @@ class media_database_sql:
         for i in inlist:
             if os.path.normcase(os.path.join(self.parent,i)) == self.db_path:
                 inlist.remove(i)
-     
+        
+        #the sorting part here is much faster than with simple filters
+        #creating media entries, on the other hand, is very slow...
         offset = 0
         for e,i in enumerate(inlist):
             while curlist[e+offset] < i:
@@ -1236,12 +1239,12 @@ class media_database_sql:
         res = []
         for i in os.listdir(d):
             path = os.path.join(d,i)
-            
             # skip the db file itself
             if os.path.normcase(path) == self.db_path:
                 continue
             
             res.append(self.create_empty_entry(path,ty))    
+
         return res
         
     def create_empty_entry(self,path,ty):
@@ -1265,7 +1268,6 @@ class media_database_sql:
             new_entry = picture_entry(path,style = self.p_style)
         else:
             new_entry = media_entry(path)
-
         return new_entry
     
     
