@@ -27,7 +27,7 @@ class media_entry:
         self.style = ensureUnicode(style)
         self.played = played
         self.accepted_format = format
-        self.filepath = self._determine_files_(self.path,self.style,self.accepted_format)
+        self.filepath = self._determine_files_(self.path,self.accepted_format)
         self.hash = hash(self.path)
         self.attrib = {}
     
@@ -40,44 +40,24 @@ class media_entry:
     def __ne__(self,other):
         return not self.__eq__(other)
     
-    def _determine_files_(self,path,style,format):
+    def _determine_files_(self,path,format):
         """
             get all the media files inside of path that
-            fit the style of the media entry. 
-            Selection is done over a predefined set of
-            file endings associated with each media type 
-        \\TODO redo this with the os.walk() function
+            fit the allowed formats of the media entry. 
         """
         fileList = []        
-        folderList = []
-        if os.path.isdir(path):
-            folderList = [path]
-        elif len(format)==0 or path.lower().endswith(format):
-            fileList.append(path)
-            return ensureStringList(fileList)
-        else:
-            return [u'']
-            #raise NoExecutableFileFoundException
+        for root,folder,files in os.walk(path):
+            for f in files:
+                if f.lower().endswith(format):
+                    fi = os.path.join(root,f)
+                    fi = os.path.normpath(fi)
+                    fi = os.path.normcase(fi)
+                    fileList.append(fi)
             
-        while len(folderList)>0:
-            ls = os.listdir(folderList[0])
-            for i in ls:
-                p = folderList[0] + '/' + i
-                if os.path.isdir(p):
-                    folderList.append(p)
-                elif len(format)==0 or p.lower().endswith(format):
-                    fileList.append(p)
-                    if style=='first':
-                        return ensureStringList(fileList)
-          
-            folderList.pop(0)
-            
-        fileList = sorted(ensureStringList(fileList))
+        fileList = sorted(fileList)
         if len(fileList)==0:
             return [u'']
             #raise NoExecutableFileFoundException
-        elif style=='last':
-            return [fileList[-1]]
         else:
             return fileList
     
