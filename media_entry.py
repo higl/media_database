@@ -15,13 +15,16 @@ else:
 
     def quote_args(seq):
         return ' '.join(quote(arg) for arg in seq)
-        
+
+entry_version = u'0.1' 
+
 class media_entry:
     """ 
         A media entry stores information about a media file or
         a folder containing a certain type of media
     """
     def __init__(self,path, type='unknown',style='random', played=False, format=()):
+        self.version = entry_version
         self.path = ensureUnicode(path) 
         self.type = ensureUnicode(type)
         self.style = ensureUnicode(style)
@@ -63,21 +66,21 @@ class media_entry:
     
     def add_attrib(self,**kwargs):
         """
-            This will save any kwarg to the attrib dictionary of the media_entry.
-            If the attrib entry already exists, it will be skipped.
-            
-            We can add attrib entries with any datatype here, but we should 
-            make sure that they are consistend 
+            deprectiated. use the update_attrib function with override=False instead 
         """
-        keys = kwargs.keys()
-        for i in keys:
-            if not self.attrib.has_key(i):
-                self.attrib[i] = makeAttribList(kwargs[i])
+        if 'override' in kwargs:
+            self.update_attrib(**kwargs)
+        else:
+            self.update_attrib(override=False,**kwargs)
+                
     
-    def update_attrib(self,**kwargs):
+    def update_attrib(self,override=True,**kwargs):
         """
             This will update any kwarg in the attrib dictionary of the media_entry.
-            If the attrib entry does not exist, it will be skipped.
+            If the attrib entry does not exist, it will be created.
+            
+            In case we want to use this function to create new attribs but 
+            don't want to override existing ones, we can use override=False.
             
             We raise an error when the datatype of the update 
             does not match the old datatype. This does not 
@@ -88,19 +91,22 @@ class media_entry:
         keys = kwargs.keys()
         for i in keys:
             if self.attrib.has_key(i):
-                update = makeAttribList(kwargs[i])
-                if len(self.attrib[i]) > 0 and len(update) > 0:
-                    ttype = type(self.attrib[i][0])
-                    if ttype in (str,unicode):
-                        ttype = basestring
-                    if not isinstance(update[0],ttype):
-                        msg = """Update to {} is of type {}, 
-                                but should be type {}""".format(
-                                i,type(update[0]),type(self.attrib[i][0])
-                                )
-                        raise TypeError(msg)
+                if override:
+                    update = makeAttribList(kwargs[i])
+                    if len(self.attrib[i]) > 0 and len(update) > 0:
+                        ttype = type(self.attrib[i][0])
+                        if ttype in (str,unicode):
+                            ttype = basestring
+                        if not isinstance(update[0],ttype):
+                            msg = """Update to {} is of type {}, 
+                                    but should be type {}""".format(
+                                    i,type(update[0]),type(self.attrib[i][0])
+                                    )
+                            raise TypeError(msg)
+                    self.attrib[i] = makeAttribList(kwargs[i])
+            else:
                 self.attrib[i] = makeAttribList(kwargs[i])
-                    
+                
     def remove_attrib(self,**kwargs):
         """
             This will remove any kwarg from the attrib dictionary of the media_entry.
@@ -324,3 +330,49 @@ class executable_entry(media_entry):
                             style=style,
                             **kwargs)
         self.attrib['tags'] = ensureStringList(tags)
+        
+def convert_to_new_version(entry):
+    """ We might save media entries in some form, e.g. as pickles. If we want 
+    to load them and include them in a program that uses a most recent version of the media entry library
+    then we might run into conflicts. 
+    
+    In order to always work with the most recent media entry version it is best practice 
+    to pass all stored entries through this function after they've been loaded. 
+    """
+    
+    try:
+        version = entry.version
+    except:
+        version = u'0.0' #the first version did not have a version label yet
+    
+    if version == entry_version:
+        return entry
+    elif version == u'0.0':
+        supported_types = {
+            'exec': executable_entry,
+            'video': video_entry,
+            'music': music_entry,
+            'picture': picture_entry,
+            'unknown': media_entry, 
+            }
+        try:
+            generator = supported_types[entry.type]
+        except KeyError:
+            print 'cannot create a new entry for type {}'.format(entry.type)
+            return None
+        kwargs = {}
+        kwargs['style'] = entry.style
+        kwargs['played'] = entry.played
+        path = entry.path
+        new_entry = generator(path, **kwargs)
+        new_entry.update_attrib(**entry.attrib)
+        return new_entry        
+    else:
+        raise NotImplementedError("""
+                      I do not know how to convert from version "{}" 
+                      to the current version "{}"'
+                      """.format(version,entry_version)) 
+    
+    
+    
+    

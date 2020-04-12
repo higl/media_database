@@ -414,11 +414,9 @@ class media_database_sql:
                 """)
         else:
             self.connection = self._create_db_(self.db_path)
-            self.fill()
-        
-        if force_update:
-            self.update()
-        
+            if not legacy_load:
+                self.fill()
+
         if legacy_load:
             self.hash = hash(parent)
             cwd = os.getcwd()        
@@ -426,6 +424,10 @@ class media_database_sql:
                 if os.path.split(i)[1] == str(self.hash)+'.pkl':
                     self._convert_pkl_to_sqlite_(i,self.connection)
                     break
+        
+        if force_update:
+            self.update()
+        
         return
         
     def _create_db_(self,d):
@@ -607,6 +609,8 @@ class media_database_sql:
             e_style = db['estyle']
             mtime = db['mtime']
         
+        for i,entry in enumerate(dlist):
+            dlist[i] = convert_to_new_version(entry)
         self.add_entries(dlist)
         return
             

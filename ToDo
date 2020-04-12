@@ -1,18 +1,43 @@
+General:
+- go to python 3
+
+Appearance:
 - make windows scalable
-- DONE fix entry length (= make layout constant)
-- DONE scrollbars
-- threading for all database functions (queueing + find out how many threads a system likes)
-- comments
 - dropdown menues for attributes in InfoWindow / InfoFrame / SelectorFrame
-- define and implement naming convention
-- put all possible attributes in a list of the database (+ count how many elements support that attribute) -> communication between database and entries needed in case of changes to an entry
-- implement some advanced search functions like AND and OR
-- clean up input string in load entry ... remove leading /n and ending spaces 
+- use human units for length strings
+
+Functionality:
 - add functionality to add attributes into InfoWindow
-
-
-Future improvements:
-- Image viewer 
+- reduce number of falls positives in video comparison (current problems: very small number of points in some frames -> reduce averaging time/ relax criteria
+                                                                          logos in corner should be detected and ignored (detection might also be useful for grouping entries) ) 
+- threading where it is necessary (mainly io stuff)  
+- the save button is kind of useless - reuse it for a update function
+- Comfort functions to:
+    - edit typos / find typos (use a 'closest string' approach)
+    - rename attributes
+- no length attribute for `.mov` and `.flv`
+- Image viewer -> use the styles
 - Video player
 - read meta data and use as attributes
+- fast load function that does not touch files. 
+ 
+Style:
+- comments
+- define and implement naming convention
+- use @property decorators where it is appropriate
+
+
+DONE:
+- fix entry length (= make layout constant)
+- scrollbars
+- implement some advanced search functions like AND and OR
+
+
+
+
+
+
+
+
+
 
