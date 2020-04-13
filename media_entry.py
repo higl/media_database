@@ -44,10 +44,21 @@ class media_entry:
         return not self.__eq__(other)
     
     def _determine_files_(self,path,format):
-        """
+        """ 
+            if path is a folder, we will
             get all the media files inside of path that
             fit the allowed formats of the media entry. 
+            
+            if path is a file we will return its path instead 
+            
         """
+        if os.path.isfile(path):
+            if path.lower().endswith(format):
+                return [path]
+            else:
+                print 'Warning: No executable file was found'
+                return [u'']
+                
         fileList = []        
         for root,folder,files in os.walk(path):
             for f in files:
@@ -59,6 +70,7 @@ class media_entry:
             
         fileList = sorted(fileList)
         if len(fileList)==0:
+            print 'Warning: No executable file was found'
             return [u'']
             #raise NoExecutableFileFoundException
         else:
@@ -197,6 +209,7 @@ class media_entry:
         //TODO replace os.system by something safer like subprocess
         """
         
+        print filepath          
         if filepath == 'unknown':
             filepath = self.get_filepath()  
         else:
@@ -205,7 +218,8 @@ class media_entry:
             except Exception:
                 print Exception
                 return
-         
+        print filepath          
+       
         if os.name == 'nt':
             filepath = os.path.normpath(filepath)
             os.startfile(filepath)
@@ -266,10 +280,13 @@ class video_entry(media_entry):
         self.attrib['genre'] = ensureStringList(genre)
         length = 0.0
         for f in self.filepath:
-            f = f.encode(encoding)
-            v=cv2.VideoCapture(f)
-            v.set(cv2.CAP_PROP_POS_AVI_RATIO,1)
-            length = length + v.get(cv2.CAP_PROP_POS_MSEC)
+            try:
+                f = f.encode(encoding)
+                v=cv2.VideoCapture(f)
+                v.set(cv2.CAP_PROP_POS_AVI_RATIO,1)
+                length = length + v.get(cv2.CAP_PROP_POS_MSEC)
+            except:
+                pass 
         self.attrib['length'] = makeAttribList(length / 1000.0)
     
 class music_entry(media_entry):
@@ -347,6 +364,7 @@ def convert_to_new_version(entry):
     
     if version == entry_version:
         return entry
+        #return media_entry(entry.path,type=entry.type,style=entry.style,played=entry.played, format=entry.accepted_format)
     elif version == u'0.0':
         supported_types = {
             'exec': executable_entry,

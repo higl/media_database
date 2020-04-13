@@ -20,6 +20,7 @@ Functionality:
 - Video player
 - read meta data and use as attributes
 - fast load function that does not touch files. 
+- there should be a way to search for non set entries 
  
 Style:
 - comments

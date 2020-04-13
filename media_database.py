@@ -1189,7 +1189,7 @@ class media_database_sql:
             Removes those that are not there anymore and
             adds those that are missing in the database 
         """
-        inlist = [unicode(i,encoding) for i in os.listdir(self.parent)]
+        inlist = os.listdir(self.parent) #self.parent is unicode -> we get a unicode list here
 
         curs = self.connection.cursor()
         
