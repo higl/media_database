@@ -208,8 +208,7 @@ class media_entry:
             play a media file
         //TODO replace os.system by something safer like subprocess
         """
-        
-        print filepath          
+               
         if filepath == 'unknown':
             filepath = self.get_filepath()  
         else:
@@ -218,8 +217,7 @@ class media_entry:
             except Exception:
                 print Exception
                 return
-        print filepath          
-       
+        print filepath.encode(encoding)
         if os.name == 'nt':
             filepath = os.path.normpath(filepath)
             os.startfile(filepath)

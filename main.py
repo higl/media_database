@@ -1,8 +1,11 @@
-import tkinter as tk
+import Tkinter as tk
 import gui
 
-master = tk.Tk()
-app = Application(master=master)
-app.master.title('Sample application')
+if __name__ == '__main__':
+    app = gui.Application()
+    app.title('Sample application')
+    app.grid_columnconfigure(0,weight=1)
+    app.grid_rowconfigure(0,weight=1)
+    app.resizable(True,True)
 
-master.mainloop()
+    app.mainloop()

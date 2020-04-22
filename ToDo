@@ -21,6 +21,8 @@ Functionality:
 - read meta data and use as attributes
 - fast load function that does not touch files. 
 - there should be a way to search for non set entries 
+- add multi threadding to comparison + use a more clustered approach that reduces memory consumption (e.g. each worker thread analyses a 20x20 matrix where the comparison files are loaded only at the start of the worker thread) 
+
  
 Style:
 - comments

@@ -5,6 +5,7 @@ import numpy as np
 import scipy.spatial
 import os
 import threading
+import multiprocessing
 import encode
 import pickle
 
@@ -524,18 +525,232 @@ def get_descriptor(file,fps=3,nsec=180,proc=1,quality='320x640',override=False,p
         with open(descriptor_file, 'rb') as input:
             descriptor = pickle.load(input)
     else:
+        if os.path.isfile(descriptor_file) and override:
+            os.remove(descriptor_file)
         if pmode:
             files = encode.findFiles(file,formats=encode.pformats,single_level=True)
             files = sorted(files)
             descriptor = get_picture_descriptor(files,quality=quality)
         else:
             descriptor = get_video_descriptor(file,nfps=fps,nkey=nsec,processes=proc,quality=quality)
-        
-        with open(descriptor_file, 'wb') as output:
-            pickle.dump(descriptor, output, pickle.HIGHEST_PROTOCOL)
+
+        if not os.path.isfile(descriptor_file): #another process might have written that file in the mean time!
+            with open(descriptor_file, 'wb') as output:
+                pickle.dump(descriptor, output, pickle.HIGHEST_PROTOCOL)
     
     return descriptor
     
+# class compare_thread(threading.Thread):
+    # """  
+        # compares video files
+        
+        # TODO: move parts of this complicated function into 
+        # separate functions to reduce duplicate code and make it more readable
+    # """
+    
+    # # this lock is used for communication between
+    # # several encode threads working on the same problem
+    # # (not yet implemented)
+    # lock = threading.Lock() 
+
+    # def __init__(self,querryfiles,sourcefiles,result,resultfile,
+                # fps=3,nsec=60,proc='4',quality='320x640',
+                # override=False,querrysource=False,pmode=False,
+                # crosscheck=False):
+        # threading.Thread.__init__(self)
+        # self.querryfiles = querryfiles
+        # self.sourcefiles = sourcefiles
+        # self.resultfile = resultfile
+        # self.result = result
+        # self.fps = fps
+        # self.nsec = nsec
+        # self.proc = proc
+        # self.quality = quality
+        # self.override = override
+        # self.querrysource = querrysource
+        # self.pmode = pmode
+        # self.crosscheck = crosscheck
+        # self.update = False
+        # self.abort = False
+        # self.message = ''
+        # # this lock is used for communication with the gui 
+        # # (or any other thread of a different class)
+        # self.self_lock = threading.Lock()
+        # return
+        
+    # def run(self):    
+        # import gc
+
+        # self.self_lock.acquire()
+        # self.update = True
+        # self.message = 'querry 0/%d done' %len(self.querryfiles)
+        # self.self_lock.release()
+
+        # querryfingerprints = []
+        # sourcefingerprints = []
+        
+        # for e,i in enumerate(self.querryfiles):
+            # desc = get_descriptor(
+                # i,fps=self.fps,nsec=self.nsec,
+                # proc=self.proc,quality=self.quality,
+                # override=self.override,pmode=self.pmode
+                # )
+            # querryfingerprints.append((i,desc))
+            
+            # self.self_lock.acquire()
+            # self.update = True
+            # self.message = 'querry %d/%d done' %(e+1,len(self.querryfiles))
+            # if self.abort:
+                # self.message = 'querry %d/%d done - aborted' %(e+1,len(self.infiles))
+                # self.abort = False
+                # return
+            # self.self_lock.release()
+        
+        # if self.querrysource:
+            # sourcefingerprints = querryfingerprints
+        # else:
+            # self.self_lock.acquire()
+            # self.update = True
+            # self.message = 'source 0/%d done' %len(self.sourcefiles)
+            # self.self_lock.release()
+            # for e,i in enumerate(self.sourcefiles):
+                # desc = get_descriptor(
+                    # i,fps=self.fps,nsec=self.nsec,
+                    # proc=self.proc,quality=self.quality,
+                    # override=self.override,pmode=self.pmode
+                    # )
+                # sourcefingerprints.append((i,desc))
+                
+                # self.self_lock.acquire()
+                # self.update = True
+                # self.message = 'source %d/%d done' %(e+1,len(self.sourcefiles))
+                # if self.abort:
+                    # self.message = 'source %d/%d done - aborted' %(e+1,len(self.infiles))
+                    # self.abort = False
+                    # return
+                # self.self_lock.release()
+                
+        # if self.pmode:
+            # res_file = self.resultfile + '.picres'
+        # else:
+            # res_file = self.resultfile + '.res'
+        
+        
+        # self.self_lock.acquire()
+        # self.update = True
+        # self.message = 'matching 0/%d done' %len(self.querryfiles)
+        # self.self_lock.release()
+        
+        
+        # if os.path.isfile(res_file) and not self.override:
+            # with open(res_file, 'rb') as input:
+                # self.result = pickle.load(input)
+        # else:
+            # self.result = {}
+        
+        
+        # import cv2            
+        # matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        
+        # crosscheck = self.crosscheck
+        
+        # #cleanup old results:
+        # self.self_lock.acquire()
+        # for i in self.result.keys():
+            # found = False
+            # for j in querryfingerprints:
+                # if i == j[0]:
+                    # found = True
+                    # break
+            # if not found:
+                # self.result.pop(i)
+        # self.self_lock.release()
+
+        # gc.collect()
+        
+        # #compute the new results
+        # for e,i in enumerate(querryfingerprints):
+            # self.self_lock.acquire()
+            # if not self.result.has_key(i[0]):
+                # self.result[i[0]] = []
+                # #we can release the lock early
+                # self.self_lock.release() 
+                # compute = np.ones(len(sourcefingerprints))
+                # outlist = sorted(sourcefingerprints, key=lambda x: x[0])
+            # else:
+                # compute = np.ones(len(sourcefingerprints))
+                # outlist = sorted(sourcefingerprints, key=lambda x: x[0])
+                # reslist = sorted([l[0] for l in self.result[i[0]]])
+                # #we release the lock after we know what needs to be computed
+                # self.self_lock.release() 
+                # offset = 0
+                # for k,l in enumerate(outlist):
+                    # if k-offset >= len(reslist)-1:
+                        # break
+                    # check = sorted([l[0],reslist[k-offset]])
+                    # while l[0] != reslist[k-offset] and check[0] != l[0]:
+                        # for en,t in enumerate(self.result[i[0]]):
+                            # if t[0] == check[0]:
+                                # self.result[i[0]].pop(en)
+                                # break
+                        # offset = offset - 1
+                        # if np.abs(k-offset) >= len(reslist)-1:
+                            # break
+                        # check = sorted([l[0],reslist[k-offset]])
+                    # if l[0] == reslist[k-offset]:
+                        # compute[k] = 0
+                    # else:
+                        # offset = offset + 1
+                # self.self_lock.acquire()
+                # for l in reslist[k-offset:]:
+                    # for en,t in enumerate(self.result[i[0]]):
+                        # if t[0] == check[0]:
+                            # self.result[i[0]].pop(en)
+                            # break
+                # #we release the lock after we removed the expired results
+                # self.self_lock.release()
+            # save = False
+            # for k,j in enumerate(outlist): 
+                # if compute[k]:
+                    # if self.pmode:
+                        # res = compare_pictures(i[1],j[1],orb_matcher=matcher)
+                    # else:
+                        # res = compare_clips(i[1],j[1],orb_matcher=matcher)
+                    # if crosscheck:
+                        # if self.pmode:
+                            # revres = compare_pictures(j[1],i[1],orb_matcher=matcher)
+                        # else:
+                            # revres = compare_clips(j[1],i[1],orb_matcher=matcher)
+                        # self.self_lock.acquire()
+                        # self.result[i[0]].append((j[0],res,revres))
+                        # self.self_lock.release()
+                    # else:
+                        # self.self_lock.acquire()
+                        # self.result[i[0]].append((j[0],res))
+                        # self.self_lock.release()
+                    # save = True
+                    
+            # if save and self.override:
+                # with open(res_file, 'wb') as output:
+                    # pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+
+            # self.self_lock.acquire()
+            # self.update = True
+            # self.message = 'matching %d/%d done' %(e+1,len(self.querryfiles))
+            # if self.abort:
+                # with open(res_file, 'wb') as output:
+                    # pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+                # self.message = 'matching %d/%d done - aborted' %(e+1,len(self.querryfiles))
+                # self.abort = False
+                # self.self_lock.release()
+                # return            
+            # self.self_lock.release()
+                
+        # with open(res_file, 'wb') as output:    
+            # pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+        
+        # return
+        
 class compare_thread(threading.Thread):
     """  
         compares video files
@@ -547,8 +762,7 @@ class compare_thread(threading.Thread):
     # this lock is used for communication between
     # several encode threads working on the same problem
     # (not yet implemented)
-    lock = threading.Lock() 
-
+    
     def __init__(self,querryfiles,sourcefiles,result,resultfile,
                 fps=3,nsec=60,proc='4',quality='320x640',
                 override=False,querrysource=False,pmode=False,
@@ -572,39 +786,34 @@ class compare_thread(threading.Thread):
         # this lock is used for communication with the gui 
         # (or any other thread of a different class)
         self.self_lock = threading.Lock()
+
         return
         
     def run(self):    
         import gc
-
-        self.self_lock.acquire()
-        self.update = True
-        self.message = 'querry 0/%d done' %len(self.querryfiles)
-        self.self_lock.release()
-
-        querryfingerprints = []
-        sourcefingerprints = []
+        import time 
         
+        # make sure that all descriptor files are there 
+        # by this we can take advantage of the ffmpeg multiprocessing capabilities 
+        # and also gain the ability to abort at any point 
         for e,i in enumerate(self.querryfiles):
             desc = get_descriptor(
                 i,fps=self.fps,nsec=self.nsec,
                 proc=self.proc,quality=self.quality,
                 override=self.override,pmode=self.pmode
                 )
-            querryfingerprints.append((i,desc))
             
             self.self_lock.acquire()
             self.update = True
             self.message = 'querry %d/%d done' %(e+1,len(self.querryfiles))
             if self.abort:
-                self.message = 'querry %d/%d done - aborted' %(e+1,len(self.infiles))
+                self.message = 'querry %d/%d done - aborted' %(e+1,len(self.querryfiles))
                 self.abort = False
+                self.self_lock.release()          
                 return
             self.self_lock.release()
         
-        if self.querrysource:
-            sourcefingerprints = querryfingerprints
-        else:
+        if not self.querrysource:
             self.self_lock.acquire()
             self.update = True
             self.message = 'source 0/%d done' %len(self.sourcefiles)
@@ -615,134 +824,243 @@ class compare_thread(threading.Thread):
                     proc=self.proc,quality=self.quality,
                     override=self.override,pmode=self.pmode
                     )
-                sourcefingerprints.append((i,desc))
                 
                 self.self_lock.acquire()
                 self.update = True
                 self.message = 'source %d/%d done' %(e+1,len(self.sourcefiles))
                 if self.abort:
-                    self.message = 'source %d/%d done - aborted' %(e+1,len(self.infiles))
+                    self.message = 'source %d/%d done - aborted' %(e+1,len(self.sourcefiles))
                     self.abort = False
+                    self.self_lock.release()          
                     return
-                self.self_lock.release()
+                self.self_lock.release()          
                 
+        # load the old result file and check what needs 
+        # to be computed 
         if self.pmode:
             res_file = self.resultfile + '.picres'
         else:
             res_file = self.resultfile + '.res'
-        
-        
-        self.self_lock.acquire()
-        self.update = True
-        self.message = 'matching 0/%d done' %len(self.querryfiles)
-        self.self_lock.release()
-        
-        
+            
+        # load or create the result dictionary 
         if os.path.isfile(res_file) and not self.override:
             with open(res_file, 'rb') as input:
                 self.result = pickle.load(input)
         else:
             self.result = {}
-        
-        
-        import cv2            
-        matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-        
-        crosscheck = self.crosscheck
-        
         #cleanup old results:
         self.self_lock.acquire()
         for i in self.result.keys():
-            found = False
-            for j in querryfingerprints:
-                if i == j[0]:
-                    found = True
-                    break
-            if not found:
+            if i not in self.querryfiles: 
                 self.result.pop(i)
         self.self_lock.release()
-
         gc.collect()
         
-        #compute the new results
-        for e,i in enumerate(querryfingerprints):
-            self.self_lock.acquire()
-            if not self.result.has_key(i[0]):
-                self.result[i[0]] = []
-                #we can release the lock early
-                self.self_lock.release() 
-                compute = np.ones(len(sourcefingerprints))
-                outlist = sorted(sourcefingerprints, key=lambda x: x[0])
+        # 1000 comparisons per process creation is a good chuncksize in principle, 
+        # but one process might end up with a 
+        # difficult task while the others have easier one, i.e., the load balancing is 
+        # not ideal. These effects should smooth out if we have 10*100 (or similar) chuncks  
+        # in the queue for the worker processes. \TODO implement that and check performance         
+        chunks,ntotal,ndone = self.create_chunks(1000)
+        
+        #start the matching
+        self.update = True
+        self.self_lock.acquire()
+        self.message = 'matching %.1f done' %(1.0*ndone/ntotal * 100.0)
+        self.self_lock.release()
+
+        while len(chunks) > 0:
+            nprocesses = min(int(self.proc),len(chunks))
+            workerchunk = chunks[:nprocesses]
+            if nprocesses < len(chunks):
+                chunks = chunks[nprocesses:]
             else:
-                compute = np.ones(len(sourcefingerprints))
-                outlist = sorted(sourcefingerprints, key=lambda x: x[0])
-                reslist = sorted([l[0] for l in self.result[i[0]]])
+                chunks = []
+            res = service(
+                    workerchunk,
+                    self.fps,
+                    self.nsec,
+                    nprocesses,
+                    self.quality,
+                    self.pmode,
+                    self.crosscheck,
+            )
+
+            self.self_lock.acquire()            
+            self.result = combine_results(res,self.result)                           
+            for r in res:
+                # \TODO ndone seems to be off! 
+                ndone += len(r)
+                    
+            # communicate with gui 
+            self.update = True
+            if self.abort:
+                with open(res_file, 'wb') as output:
+                    pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+                self.message = 'matching %.1f done - aborted' %(1.0*ndone/ntotal * 100.0)
+                self.abort = False
+                chunks = []
+            else:
+                self.message = 'matching %.1f done' %(1.0*ndone/ntotal * 100.0)
+
+            self.self_lock.release()
+            
+            
+        #we are done and write the result now 
+        self.self_lock.acquire()
+        with open(res_file, 'wb') as output:
+            pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+        self.self_lock.release()
+        
+        #give the gui time to update 
+        time.sleep(10)
+        
+        return
+        
+    def create_chunks(self,length):
+        """ create a list of chunks where each chunk has "length" comparisons 
+        """
+        # we need to figure out what has been done already 
+        # 
+        
+        compute = np.ones([len(self.querryfiles),len(self.sourcefiles)])
+        
+        self.self_lock.acquire()
+        for e,i in enumerate(self.querryfiles):
+            if self.result.has_key(i):
+                outlist = sorted(self.sourcefiles)
+                reslist = sorted([l[0] for l in self.result[i]])
                 #we release the lock after we know what needs to be computed
-                self.self_lock.release() 
                 offset = 0
                 for k,l in enumerate(outlist):
                     if k-offset >= len(reslist)-1:
                         break
-                    check = sorted([l[0],reslist[k-offset]])
-                    while l[0] != reslist[k-offset] and check[0] != l[0]:
-                        for en,t in enumerate(self.result[i[0]]):
+                    check = sorted([l,reslist[k-offset]])
+                    while l != reslist[k-offset] and check[0] != l:
+                        for en,t in enumerate(self.result[i]):
                             if t[0] == check[0]:
-                                self.result[i[0]].pop(en)
+                                self.result[i].pop(en)
                                 break
                         offset = offset - 1
                         if np.abs(k-offset) >= len(reslist)-1:
                             break
-                        check = sorted([l[0],reslist[k-offset]])
-                    if l[0] == reslist[k-offset]:
-                        compute[k] = 0
+                        check = sorted([l,reslist[k-offset]])
+                    if l == reslist[k-offset]:
+                        compute[e,k] = 0
                     else:
                         offset = offset + 1
-                self.self_lock.acquire()
                 for l in reslist[k-offset:]:
-                    for en,t in enumerate(self.result[i[0]]):
+                    for en,t in enumerate(self.result[i]):
                         if t[0] == check[0]:
-                            self.result[i[0]].pop(en)
+                            self.result[i].pop(en)
                             break
-                #we release the lock after we removed the expired results
-                self.self_lock.release()
-            save = False
-            for k,j in enumerate(outlist): 
-                if compute[k]:
-                    if self.pmode:
-                        res = compare_pictures(i[1],j[1],orb_matcher=matcher)
-                    else:
-                        res = compare_clips(i[1],j[1],orb_matcher=matcher)
-                    if crosscheck:
-                        if self.pmode:
-                            revres = compare_pictures(j[1],i[1],orb_matcher=matcher)
-                        else:
-                            revres = compare_clips(j[1],i[1],orb_matcher=matcher)
-                        self.self_lock.acquire()
-                        self.result[i[0]].append((j[0],res,revres))
-                        self.self_lock.release()
-                    else:
-                        self.self_lock.acquire()
-                        self.result[i[0]].append((j[0],res))
-                        self.self_lock.release()
-                    save = True
-                    
-            if save and self.override:
-                with open(res_file, 'wb') as output:
-                    pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
-
-            self.self_lock.acquire()
-            self.update = True
-            self.message = 'matching %d/%d done' %(e+1,len(self.querryfiles))
-            if self.abort:
-                with open(res_file, 'wb') as output:
-                    pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
-                self.message = 'matching %d/%d done - aborted' %(e+1,len(self.querryfiles))
-                self.abort = False
-                self.self_lock.release()
-                return            
-            self.self_lock.release()
-                
-        with open(res_file, 'wb') as output:    
-            pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+        self.self_lock.release() 
         
-        return
+        args = np.argwhere(compute)
+        comparisons = [[self.querryfiles[i],self.sourcefiles[j]] for i,j in args]
+        
+        chunks = []
+        n = 0
+        while (n+1)*length < len(comparisons):
+            chunks.append(comparisons[n*length:(n+1)*length]) 
+            n += 1
+        chunks.append(comparisons[n*length:]) 
+        
+        return chunks, np.prod(compute.shape), np.prod(compute.shape)-len(comparisons) 
+                    
+#we cannot make this into class functions because windows needs these functions to be pickable
+#for multiprocessing (see documnentation for multiprocessing for python 2.7)        
+def compare_worker(chunk,outputbuffer,fps,nsec,proc,
+                   quality,pmode,crosscheck):    
+    
+    res = compare_chunk(chunk,fps,nsec,proc,quality,pmode,crosscheck)
+    outputbuffer.put(res)
+    return
+
+def compare_chunk(chunks,fps,nsec,proc,quality,pmode,crosscheck):
+    import cv2
+    matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    
+    result = {}
+    fprints = load_fingerprints(chunks,fps,nsec,proc,quality,pmode,crosscheck)
+
+    for chunk in chunks:
+        if chunk[0] not in result:
+            result[chunk[0]] = []
+
+        if pmode:
+            res = compare_pictures(fprints[chunk[0]],fprints[chunk[1]],orb_matcher=matcher)
+        else:
+            res = compare_clips(fprints[chunk[0]],fprints[chunk[1]],orb_matcher=matcher)
+        if crosscheck:
+            if pmode:
+                revres = compare_pictures(fprints[chunk[1]],fprints[chunk[0]],orb_matcher=matcher)
+            else:
+                revres = compare_clips(fprints[chunk[1]],fprints[chunk[0]],orb_matcher=matcher)
+            result[chunk[0]].append((chunk[1],res,revres))
+        else:
+            result[chunk[0]].append((chunk[1],res))
+    return result       
+
+def load_fingerprints(chunks,fps,nsec,proc,quality,pmode,crosscheck):
+    
+    #flatten chunks list
+    ch = [name for sublist in chunks for name in sublist]
+    filenames = list(set(ch))
+    
+    fingerprints = {}
+    for i in filenames:
+        desc = get_descriptor(
+            i,fps=fps,nsec=nsec,
+            proc=proc,quality=quality,
+            override=False,pmode=pmode
+            )
+        fingerprints[i] = desc
+        
+    return fingerprints 
+    
+def service(
+                chunks,
+                fps,
+                nsec,
+                proc,
+                quality,
+                pmode,
+                crosscheck
+        ):
+    import multiprocessing
+    
+    result_buff = multiprocessing.Queue()
+
+    workers = [multiprocessing.Process(target=compare_worker,args=(chunks[x],
+                                                                result_buff,
+                                                                fps,
+                                                                nsec,
+                                                                '1',
+                                                                quality,
+                                                                pmode,
+                                                                crosscheck
+                                                                )) for x in range(int(proc))]                       
+       
+    for p in workers:
+        p.start()
+
+    total_res = {}
+    i = 0 
+    while i < int(proc):
+        res = result_buff.get()
+        total_res = combine_results(res,total_res)  
+        i += 1
+
+    return total_res         
+        
+        
+def combine_results(res,combine):
+    """combines the dictionaries res and combine and returns the combined dict 
+    """
+    for r in res.keys():
+        if r in combine:
+            combine[r] += res[r]
+        else:
+            combine[r] = res[r]
+    return combine 

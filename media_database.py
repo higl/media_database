@@ -732,13 +732,15 @@ class media_database_sql:
             curs.close()
         return
         
-    def delete_entry(self,entry,cursor=None):
+    def delete_entry(self,entry,cursor=None,ispath=False):
         """
             remove a media entry from the database
             
             if the media entry does not exists, this function silently exits
         """
-        
+        if ispath:
+            entry = self.create_media_entry_from_db(entry)
+            
         supported_types = {
                    'exec': ['Type_Executable'],
                    'video': ['Type_Video'],
@@ -996,17 +998,17 @@ class media_database_sql:
         #Be aware that the full path still needs to contain the parent path
         #and is only allowed to go 1 level deeper
         
-        cwd = os.path.normcase(os.getcwd())
-        if os.path.exists(path):
-            split = os.path.split(os.path.normcase(path))
-            if split[0] == self.parent or cwd == self.parent:
-                path = split[1]
-            else:
-                raise AttributeError('{} is not part of the database'.format(path))
-        else:
-            join = os.path.join(self.parent,path)
-            if not os.path.exists(join):
-                raise AttributeError('{} is not part of the database'.format(join))
+        # cwd = os.path.normcase(os.getcwd())
+        # if os.path.exists(path):
+            # split = os.path.split(os.path.normcase(path))
+            # if split[0] == self.parent or cwd == self.parent:
+                # path = split[1]
+            # else:
+                # raise AttributeError('{} is not part of the database'.format(path))
+        # else:
+            # join = os.path.join(self.parent,path)
+            # if not os.path.exists(join):
+                # raise AttributeError('{} is not part of the database'.format(join))
         
         supported_types = {
             'exec': [executable_entry,['tags']],
@@ -1035,7 +1037,12 @@ class media_database_sql:
                     WHERE path = ?"""
         path = self.sanitize_querry(path)
         curs.execute(querry, [path])
-        res = curs.fetchone() #paths are unique!
+        try:
+            res = curs.fetchone() #paths are unique!
+        except:
+            join = os.path.join(self.parent,path)
+            raise AttributeError('{} is not part of the database'.format(join))
+
         typ = res[0]
         style = res[1]
         played = bool(res[2])
@@ -1163,7 +1170,7 @@ class media_database_sql:
         curs.close()
         return
 
-    def delete_entries(self,elist):
+    def delete_entries(self,elist,ispath=False):
         """
             delete several entries
             this is more efficient than adding the entries 
@@ -1172,8 +1179,7 @@ class media_database_sql:
         curs = self.connection.cursor()
 
         for e in elist:
-            self.delete_entry(e,cursor=curs)
-            self.saved = False
+            self.delete_entry(e,cursor=curs,ispath=ispath)
 
         self.connection.commit()
         curs.close()
@@ -1215,7 +1221,8 @@ class media_database_sql:
         offset = 0
         for e,i in enumerate(inlist):
             while curlist[e+offset] < i:
-                entry = self.create_empty_entry(curlist[e+offset],'unknown')
+                #entry = self.create_empty_entry(curlist[e+offset],'unknown')
+                entry = os.path.split(curlist[e+offset])[-1]
                 todelete.append(entry)
                 offset = offset + 1
             if curlist[e+offset] > i:
@@ -1226,7 +1233,7 @@ class media_database_sql:
         if len(toadd) > 0:
             self.add_entries(toadd)
         if len(todelete) > 0:
-            self.delete_entries(todelete)
+            self.delete_entries(todelete,ispath=True)
             
         self.connection.commit()
         curs.close()

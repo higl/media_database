@@ -10,6 +10,8 @@ import os
 import numpy as np
 import mdb_util
 import stat
+import sys
+encoding = sys.getfilesystemencoding()
 
 class Application(tk.Tk):
     
@@ -1847,21 +1849,26 @@ class CompareWindow(tk.Toplevel):
         destination = db.parent
         f = os.path.split(fi)[-1]
         desc = fi+'.dscr'
- 
-        path = destination + '/' + os.path.splitext(f)[0]
+        
+        destination = mdb_util.ensureUnicode(destination)
+        f = mdb_util.ensureUnicode(f)
+        desc = mdb_util.ensureUnicode(desc)
+
+        path = os.path.join(destination,os.path.splitext(f)[0])
         path = path.rstrip()
-        if len(path+'/'+f) > 250:
-            path = destination + '/' + os.path.splitext(f)[0][0:250-len(f)-2-len(destination)]
+        if len(os.path.join(path,f)) > 250:
+            path = os.path.join(destination,os.path.splitext(f)[0][0:250-len(f)-2-len(destination)])
             path = path.rstrip()
+
         i = 0
         opath = path
         while os.path.isdir(path):
-            path = opath + '_' + str(i)
+            path = opath + u'_' + unicode(str(i),encoding)
             i = i+1
             
         os.mkdir(path)
-        os.rename(fi,path+'/'+f)
-        os.rename(desc,path+'/'+os.path.split(desc)[-1])
+        os.rename(fi,os.path.join(path,f))
+        os.rename(desc,os.path.join(path,os.path.split(desc)[-1]))
         
         e = me.video_entry(path)
         db.add_entry(e)
@@ -1936,10 +1943,14 @@ class resultFrame(tk.Frame):
                         s = max([s,revs])
                         
                     if s >= self.vmin and s <= self.vmax:
-                        self.resultList.append(resultElement(i,j[0],s,nmatch,master=self,result=result,pmode=pmode))
-                            
+                        try:
+                            self.resultList.append(resultElement(i,j[0],s,nmatch,master=self,result=result,pmode=pmode))    
+                        except tk.TclError:
+                            # the element probably self destructed!
+                            continue
                         self.resultList[-1].grid(row=row,column=0,columnspan=5,rowspan=2)
                         row = row+2
+
 
     def clearLists(self):
         for l in self.resultList:
@@ -1966,6 +1977,16 @@ class resultElement(tk.Frame):
         self.score = score
         self.nmatch = nmatch
         self.result = result
+        if self.querryE.filepath == [u'']:
+            self.result.pop(self.querry)
+            self.master.update_widgets(self.result,pmode=self.pmode)
+            self.destroy()
+        elif self.sourceE.filepath == [u'']:
+            for e,s in enumerate(self.result[self.querry]):
+                if s[0] == self.source:
+                    self.result[self.querry].pop(e)
+            self.master.update_widgets(self.result,pmode=self.pmode)
+            self.destroy()
         self.grid()
         self.createWidgets()
         
@@ -2054,10 +2075,10 @@ class AutoScrollbar(tk.Scrollbar):
 
     
             
-app = Application()
-app.title('Sample application')
-app.grid_columnconfigure(0,weight=1)
-app.grid_rowconfigure(0,weight=1)
-app.resizable(True,True)
+# app = Application()
+# app.title('Sample application')
+# app.grid_columnconfigure(0,weight=1)
+# app.grid_rowconfigure(0,weight=1)
+# app.resizable(True,True)
 
-app.mainloop()
+# app.mainloop()
