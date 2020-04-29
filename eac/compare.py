@@ -681,9 +681,7 @@ class compare_thread(threading.Thread):
             # communicate with gui 
             self.update = True
             if self.abort:
-                with open(res_file, 'wb') as output:
-                    pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
-                self.message = 'matching %.1f done - aborted' %(1.0*ndone/ntotal * 100.0)
+                self.message = 'matching %.1f done - emptying queue' %(1.0*ndone/ntotal * 100.0)
                 self.abort = False
                 chunks = []
             else:
@@ -694,8 +692,17 @@ class compare_thread(threading.Thread):
             
         #we are done and write the result now 
         self.self_lock.acquire()
+        self.update = True
+        self.message = 'matching %.1f done - writing results' %(1.0*ndone/ntotal * 100.0)
+        self.self_lock.release()
+        #give the gui time to update 
+        time.sleep(3)
+        
+        self.self_lock.acquire()
         with open(res_file, 'wb') as output:
             pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
+        self.update = True
+        self.message = 'matching %.1f done - finished writing' %(1.0*ndone/ntotal * 100.0)
         self.self_lock.release()
         
         #give the gui time to update 

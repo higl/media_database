@@ -1792,6 +1792,7 @@ class CompareWindow(tk.Toplevel):
         if self.thread != None and self.thread.is_alive():
             self.thread.self_lock.acquire()
             self.thread.abort = True
+            self.error.set(self.thread.message + '- abort requested')
             self.thread.self_lock.release()
         return
         
