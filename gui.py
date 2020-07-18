@@ -11,6 +11,7 @@ import numpy as np
 import mdb_util
 import stat
 import sys
+import shutil
 encoding = sys.getfilesystemencoding()
 
 class Application(tk.Tk):
@@ -1165,10 +1166,10 @@ class EncodeWindow(tk.Toplevel):
                 else:
                     os.remove(self.result[i])
                     try:
-                        os.rename(i,self.result[i])
+                        shutil.move(i,self.result[i])
                     except:
                         os.chmod(i, stat.S_IRWXU| stat.S_IRWXG| stat.S_IRWXO)
-                        os.rename(i,self.result[i])
+                        shutil.move(i,self.result[i])
                     
                 self.result.pop(i)
 
@@ -1350,10 +1351,10 @@ class CheckWindow(tk.Toplevel):
             else:
                 os.remove(self.output)
                 try:
-                    os.rename(self.input,self.output)
+                    shutil.move(self.input,self.output)
                 except:
                     os.chmod(self.input, stat.S_IRWXU| stat.S_IRWXG| stat.S_IRWXO)
-                    os.rename(self.input,self.output)
+                    shutil.move(self.input,self.output)
                 
             self.master.update(remove = self.input)
             self.destroy()
@@ -1847,31 +1848,43 @@ class CompareWindow(tk.Toplevel):
             does the physical data transfer from the output folder to the media database folder
             has to take care of too long filenames
         """
+        pmode = self.pmode.get()
+        
         destination = db.parent
+        pmode = self.pmode.get()
         f = os.path.split(fi)[-1]
         desc = fi+'.dscr'
         
         destination = mdb_util.ensureUnicode(destination)
         f = mdb_util.ensureUnicode(f)
         desc = mdb_util.ensureUnicode(desc)
-
-        path = os.path.join(destination,os.path.splitext(f)[0])
-        path = path.rstrip()
-        if len(os.path.join(path,f)) > 250:
-            path = os.path.join(destination,os.path.splitext(f)[0][0:250-len(f)-2-len(destination)])
+        
+        if pmode:
+            path = os.path.join(destination,f)
+            if len(path) > 210:
+                path = os.path.join(destination,f[0:210-len(f)-2-len(destination)])
+                path = path.rstrip()
+        else:
+            path = os.path.join(destination,os.path.splitext(f)[0])
             path = path.rstrip()
+            if len(os.path.join(path,f)) > 250:
+                path = os.path.join(destination,os.path.splitext(f)[0][0:250-len(f)-2-len(destination)])
+                path = path.rstrip()
 
         i = 0
         opath = path
         while os.path.isdir(path):
             path = opath + u'_' + unicode(str(i),encoding)
             i = i+1
-            
-        os.mkdir(path)
-        os.rename(fi,os.path.join(path,f))
-        os.rename(desc,os.path.join(path,os.path.split(desc)[-1]))
         
-        e = me.video_entry(path)
+        if pmode:
+            shutil.move(fi,path)
+            e = me.picture_entry(path)
+        else:
+            os.mkdir(path)
+            shutil.move(fi,os.path.join(path,f))
+            shutil.move(desc,os.path.join(path,os.path.split(desc)[-1]))
+            e = me.video_entry(path)
         db.add_entry(e)
         
     def onClose(self):

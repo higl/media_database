@@ -3,6 +3,9 @@ import subprocess
 import tempfile
 import threading
 import pickle
+import shutil
+import sys
+encoding = sys.getfilesystemencoding()
 
 vformats = ('.avi', '.mp4', '.flv','.m4v','.wmv','.mpeg','.mkv','.mov','.rm','.mpg','.MP4','.3gp')
 pformats = ('.png', '.jpg', '.jpeg','.tiff','.bmp','.JPG','.JPEG')
@@ -205,6 +208,7 @@ def findFiles(path,formats=(),return_root=False,single_level=False):
         find all files in path that have the specified formats
     """
     l = []
+    path = ensureUnicode(path)
     if not os.path.isdir(path):
         return [path]
 
@@ -288,7 +292,7 @@ class encode_thread(threading.Thread):
                     else:
                         temp = t                
                 inp = temp + '\\' + inp
-                os.rename(prefix+orig,inp)
+                shutil.move(prefix+orig,inp)
                 i = inp
             out = encode(
                 i,self.outpath,
@@ -317,3 +321,10 @@ def rreplace(s,old,new,number):
     """
     li = s.rsplit(old, number)
     return new.join(li)
+    
+
+def ensureUnicode(string):
+    if type(string) == unicode:
+        return string
+    else:
+        return unicode(string,encoding)
