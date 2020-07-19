@@ -8,6 +8,8 @@ import threading
 import multiprocessing
 import encode
 import pickle
+import sys
+encoding = sys.getfilesystemencoding()                
 
 # Video transformation
 def get_video_descriptor(video,nfps=3,quality='320x640',nkey=180,processes=1):
@@ -515,12 +517,12 @@ def get_descriptor(file,fps=3,nsec=180,proc=1,quality='320x640',override=False,p
         find all the fingerprint (descriptor) files of the involved videos. 
         If no fingerprint file exists, it will be created
     """
-    
+
     if pmode:
         descriptor_file = os.path.join(file,'img.dscr')
     else:
         descriptor_file = file+'.dscr'
-
+    
     if os.path.isfile(descriptor_file) and not override:
         with open(descriptor_file, 'rb') as input:
             descriptor = pickle.load(input)
@@ -529,9 +531,10 @@ def get_descriptor(file,fps=3,nsec=180,proc=1,quality='320x640',override=False,p
             os.remove(descriptor_file)
         if pmode:
             files = encode.findFiles(file,formats=encode.pformats,single_level=True)
-            files = sorted(files)
+            files = sorted([f.encode(encoding) for f in files])
             descriptor = get_picture_descriptor(files,quality=quality)
         else:
+            file = file.encode(encoding)
             descriptor = get_video_descriptor(file,nfps=fps,nkey=nsec,processes=proc,quality=quality)
 
         if not os.path.isfile(descriptor_file): #another process might have written that file in the mean time!

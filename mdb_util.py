@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 encoding = sys.getfilesystemencoding()
 
 def rm_empty_folders(path):
@@ -67,4 +68,31 @@ def ensureUnicode(string):
         return string
     else:
         return unicode(string,encoding)
-        
+
+
+def rename_to_ascii(filelist,recursive=False):
+    filelist = ensureStringList(filelist)
+    for f in filelist: 
+        #WARNING: this potentially moves/creates large unwanted directory #structures if there are unicode characters in the path until we #reach the file we are interested in, which is usually the last #segment of the path, but does not have to be there  
+        ascii = f.encode('ascii',errors='ignore').decode(encoding)
+        if ascii != f:
+            shutil.move(f,ascii)
+            f = ascii
+        if os.path.isdir(f) and recursive:
+            for root, dirs, files in os.walk(ascii, topdown=True):
+                #os.walk allows to modify the dirs array in place to 
+                #and then only uses the remaining/changed values further
+                #down the tree
+                for d in dirs:
+                    ascii = d.encode('ascii',errors='ignore').decode(encoding)
+                    if ascii != d:
+                        shutil.move(os.path.join(root, d),os.path.join(root, ascii))
+                        d = ascii
+                
+                for name in files:
+                    ascii = name.encode('ascii',errors='ignore').decode(encoding)
+                    if ascii != name:
+                        shutil.move(os.path.join(root, name),os.path.join(root, ascii))
+                        name = ascii
+    return filelist
+          

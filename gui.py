@@ -1717,7 +1717,9 @@ class CompareWindow(tk.Toplevel):
         else:
             self.infiles  = eace.findFiles(self.inp,formats=eace.vformats)
             self.outfiles = eace.findFiles(self.outp,formats=eace.vformats)
-            
+        
+        self.infiles = mdb_util.rename_to_ascii(self.infiles,recursive=self.pmode.get())
+        self.outfiles = mdb_util.rename_to_ascii(self.outfiles,recursive=self.pmode.get())
         self.infiles = sorted(self.infiles)
         self.outfiles = sorted(self.outfiles)
         
@@ -1731,7 +1733,6 @@ class CompareWindow(tk.Toplevel):
         
         self.ready = True
         self.error.set('')
-        
 
 
     def compare(self,event):
