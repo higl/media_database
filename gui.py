@@ -1588,6 +1588,10 @@ class CompareWindow(tk.Toplevel):
         self.pmode = tk.IntVar()
         self.pmodeBox = tk.Checkbutton(self,text='picture mode',variable=self.pmode)
         self.pmodeBox.grid(row=orow+7,column=ocol,columnspan=2,**options)
+
+        self.renameascii = tk.IntVar()
+        self.renameasciiBox = tk.Checkbutton(self,text='rename to ascii',variable=self.renameascii)
+        self.renameasciiBox.grid(row=orow+8,column=ocol,columnspan=2,**options)
         
         self.abortButton = tk.Button(self,text='Abort')
         self.abortButton.grid(row=orow+23,column=ocol, columnspan=2,**options)
@@ -1718,8 +1722,9 @@ class CompareWindow(tk.Toplevel):
             self.infiles  = eace.findFiles(self.inp,formats=eace.vformats)
             self.outfiles = eace.findFiles(self.outp,formats=eace.vformats)
         
-        self.infiles = mdb_util.rename_to_ascii(self.infiles,recursive=self.pmode.get())
-        self.outfiles = mdb_util.rename_to_ascii(self.outfiles,recursive=self.pmode.get())
+        if self.renameascii.get():
+            self.infiles = mdb_util.rename_to_ascii(self.infiles,recursive=self.pmode.get())
+            self.outfiles = mdb_util.rename_to_ascii(self.outfiles,recursive=self.pmode.get())
         self.infiles = sorted(self.infiles)
         self.outfiles = sorted(self.outfiles)
         

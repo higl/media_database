@@ -693,7 +693,7 @@ class media_database_sql:
         mediaid = curs.lastrowid
         
         # create the entry in the type DB. Unknown Types have no type DB!
-        if not typ == 'unknown':
+        if len(supported_types[typ]) > 0:
             querry = "INSERT INTO {} VALUES (?".format(supported_types[typ][0])
             querry = querry + ',?' * supported_types[typ][1] 
             querry = querry + ',?' * len(supported_types[typ][2])
@@ -872,7 +872,8 @@ class media_database_sql:
                     'exec': ['Type_Executable',1,[]],
                     'video': ['Type_Video',3,['length']],
                     'music': ['Type_Music',2,['ntracks']],
-                    'picture': ['Type_Picture',1,['npics']]
+                    'picture': ['Type_Picture',1,['npics']],
+                    'unknown': [None,0,[]]
                     }
         
         if typ not in supported_types:
@@ -929,26 +930,32 @@ class media_database_sql:
         # if the type was changed, create a new entry
         # and delete the old one in the respective tables
         if typechange:
-            querry = """
-                        DELETE 
-                        FROM {} 
-                        WHERE mediaID = ? ;
-                     """.format(supported_types[otype][0])
-            params = mediaid
-            curs.execute(querry,params)
-            
-            querry = """
-                        INSERT 
-                        INTO {} 
-                        VALUES (?
-                    """.format(supported_types[typ][0])
-            querry = querry + ',?' * supported_types[typ][1] 
-            querry = querry + ',?' * len(supported_types[typ][2])
-            querry = querry + ');'
-            params = [mediaid]*(supported_types[typ][1]+1)
-            for a in supported_types[typ][2]:
-                params.append(attribs[a])
-            curs.execute(querry,params)
+            typetable = supported_types[otype][0]
+            print(otype,typ,typechange,typetable != None)
+            if typetable != None:
+                querry = """
+                            DELETE 
+                            FROM {} 
+                            WHERE mediaID = ? ;
+                         """.format(typetable)
+                params = mediaid
+                curs.execute(querry,params)
+
+            typetable = supported_types[typ][0]
+            if typetable != None:
+                querry = """
+                            INSERT 
+                            INTO {} 
+                            VALUES (?
+                        """.format(typetable)
+                querry = querry + ',?' * supported_types[typ][1] 
+                querry = querry + ',?' * len(supported_types[typ][2])
+                querry = querry + ');'
+                params = [mediaid]*(supported_types[typ][1]+1)
+                for a in supported_types[typ][2]:
+                    params.append(attribs[a][0])
+                print querry, params
+                curs.execute(querry,params)
         
         if typechange or update_attrib:
             for a in attribs:
@@ -1207,9 +1214,13 @@ class media_database_sql:
         curlist = sorted(curlist)
         inlist = sorted(inlist)
         
+        querry = "SELECT path from MediaEntries WHERE type='unknown'"
+        curs.execute(querry)
+        unknown = curs.fetchall()
+        unknown = [i[0] for i in unknown]
+
         toadd = []
         todelete = []
-
 
         #filter the db file itself 
         for i in inlist:
@@ -1226,7 +1237,7 @@ class media_database_sql:
                 todelete.append(entry)
                 offset = offset + 1
             if curlist[e+offset] > i:
-                entry = self.create_empty_entry(i,'unknown')
+                entry = self.create_empty_entry(os.path.join(self.parent,i),'unknown')
                 toadd.append(entry)
                 offset = offset - 1
 
@@ -1234,7 +1245,15 @@ class media_database_sql:
             self.add_entries(toadd)
         if len(todelete) > 0:
             self.delete_entries(todelete,ispath=True)
-            
+        
+        unknown = filter(lambda x: x not in todelete, unknown)
+        
+        #try to update the media entries with unknown type, maybe we fixed them 
+        #in the meantime
+        for u in unknown:
+            entry = self.create_empty_entry(os.path.join(self.parent,u),'unknown')
+            self.update_entry(entry,cursor=curs)
+        
         self.connection.commit()
         curs.close()
         self.saved = False
