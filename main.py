@@ -1,4 +1,4 @@
-import Tkinter as tk
+import tkinter as tk
 import gui
 
 if __name__ == '__main__':
