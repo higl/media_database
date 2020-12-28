@@ -1001,37 +1001,43 @@ class EncodeWindow(tk.Toplevel):
         self.optionLabel = tk.Label(self,text='Options:')
         self.optionLabel.grid(row=orow,column=ocol,columnspan=2,**options)
 
+        self.encoderLabel = tk.Label(self,text='encoder')
+        self.encoderLabel.grid(row=orow+1,column=ocol,columnspan=1,**options)
+        self.encoderEntry = tk.Entry(self)
+        self.encoderEntry.grid(row=orow+1,column=ocol+1,columnspan=1,**options)
+        self.encoderEntry.insert(tk.END,'ffmpeg')
+
         self.qualityLabel = tk.Label(self,text='quality')
-        self.qualityLabel.grid(row=orow+1,column=ocol,columnspan=1,**options)
+        self.qualityLabel.grid(row=orow+2,column=ocol,columnspan=1,**options)
         self.qualityEntry = tk.Entry(self)
-        self.qualityEntry.grid(row=orow+1,column=ocol+1,columnspan=1,**options)
+        self.qualityEntry.grid(row=orow+2,column=ocol+1,columnspan=1,**options)
         self.qualityEntry.insert(tk.END,'low')
 
         self.procLabel = tk.Label(self,text='processors')
-        self.procLabel.grid(row=orow+2,column=ocol,columnspan=1,**options)
+        self.procLabel.grid(row=orow+3,column=ocol,columnspan=1,**options)
         self.procEntry = tk.Entry(self)
-        self.procEntry.grid(row=orow+2,column=ocol+1,columnspan=1,**options)
+        self.procEntry.grid(row=orow+4,column=ocol+1,columnspan=1,**options)
         self.procEntry.insert(0,'4')
 
         self.override = tk.IntVar()
         self.overrideBox = tk.Checkbutton(self,text='override',variable=self.override)
-        self.overrideBox.grid(row=orow+3,column=ocol,columnspan=2,**options)
+        self.overrideBox.grid(row=orow+4,column=ocol,columnspan=2,**options)
 
         self.extend = tk.IntVar()
         self.extendBox = tk.Checkbutton(self,text='extend filenames',variable=self.extend)
-        self.extendBox.grid(row=orow+4,column=ocol,columnspan=2,**options)
+        self.extendBox.grid(row=orow+5,column=ocol,columnspan=2,**options)
         self.extendBox.select()
 
         self.abortButton = tk.Button(self,text='Abort')
-        self.abortButton.grid(row=orow+5,column=ocol, columnspan=2,**options)
+        self.abortButton.grid(row=orow+6,column=ocol, columnspan=2,**options)
         self.abortButton.bind("<Button-1>", self.abort_thread)
 
         self.emptyButton = tk.Button(self,text='Rm empty folders')
-        self.emptyButton.grid(row=orow+6,column=ocol, columnspan=2,**options)
+        self.emptyButton.grid(row=orow+7,column=ocol, columnspan=2,**options)
         self.emptyButton.bind("<Button-1>", self.rm_empty_folders)
 
         self.mergeButton = tk.Button(self,text='Merge Output Videos')
-        self.mergeButton.grid(row=orow+7,column=ocol, columnspan=2,**options)
+        self.mergeButton.grid(row=orow+8,column=ocol, columnspan=2,**options)
         self.mergeButton.bind("<Button-1>", self.merge_videos)
 
         self.closeButton = tk.Button(self,text='Close')
@@ -1048,6 +1054,7 @@ class EncodeWindow(tk.Toplevel):
             list into a single file
         """
         selected = self.getSelected(list=self.outputList)
+        encoder = self.encoderEntry.get()
 
         notfound = np.ones(len(selected))
         for i in list(self.result.keys()):
@@ -1056,10 +1063,10 @@ class EncodeWindow(tk.Toplevel):
                     notfound[e] = 0
 
         if any(notfound):
-            out = eace.merge_videos(selected,self.outp,remove=True)
+            out = eace.merge_videos(selected,self.outp,remove=True,encoder=encoder)
         else:
             self.error.set('WARNING: Not finalized files selected, please delete merged files manually')
-            out = eace.merge_videos(selected,self.outp,remove=False)
+            out = eace.merge_videos(selected,self.outp,remove=False,encoder=encoder)
 
         self.outputList.insert(tk.END,out)
 
@@ -1197,9 +1204,10 @@ class EncodeWindow(tk.Toplevel):
             if self.ready:
                 self.error.set('')
                 kwargs = {}
+                kwargs['encoder'] = self.encoderEntry.get()
                 kwargs['quality'] = self.qualityEntry.get()
-                kwargs['proc'] = self.procEntry.get()
-                kwargs['extend'] = self.extend.get()
+                kwargs['processes'] = self.procEntry.get()
+                kwargs['override'] = self.extend.get()
 
                 self.thread = eace.encode_thread(
                                 self.infiles,self.outp,
