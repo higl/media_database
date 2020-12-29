@@ -882,14 +882,14 @@ class StatisticsWindow(tk.Toplevel):
         self.attribList.bind("<<ListboxSelect>>", self.displayStat)
 
 
-        self.statList = tk.Listbox(self,width=25)
+        self.statList = tk.Listbox(self,width=35)
         self.statList.grid(row=0,column=4,rowspan=20,columnspan=6)
         scrollbar_stat = tk.Scrollbar(self)
         scrollbar_stat.grid(row=0,column=11,rowspan=20,sticky='NSW')
         scrollbar_stat.config(command=self.statList.yview)
         self.statList.config(yscrollcommand=scrollbar_stat.set)
 
-        self.countLabel = tk.Label(self,text='Entry Count: ' + str(self.count))
+        self.countLabel = tk.Label(self,text='Entry Count: {:<10}'.format(str(self.count)))
         self.countLabel.grid(row=20,column=7,sticky = 'NSEW',padx=3,pady=3)
 
         self.closeButton = tk.Button(self,text='close')
