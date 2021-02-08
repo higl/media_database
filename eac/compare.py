@@ -12,12 +12,12 @@ import sys
 encoding = sys.getfilesystemencoding()
 
 # Video transformation
-def get_video_descriptor(video,nfps=3,quality='320x640',nkey=180,processes=1):
+def get_video_descriptor(video,nfps=3,quality='320x640',nkey=180,processes=1,return_frames=False,encoder='ffmpeg',**kwargs):
     """
         compute the fingerprint file of a video file.
     """
 
-    N_opts = {'320x640':320,'qcif':72}
+    N_opts = {'320x640':320,'qcif':72,'320x640-x264':320}
     try:
         N = N_opts[quality]
         M = 2*N
@@ -26,9 +26,9 @@ def get_video_descriptor(video,nfps=3,quality='320x640',nkey=180,processes=1):
         return
     #change resolution to MxN with N=2xM (ffmpeg option is -s 2*NxN)
     outpath = tempfile.mkdtemp()
-    output = outpath + "\\" + os.path.split(video)[-1]
+    output = os.path.join(outpath, os.path.split(video)[-1])
     output = rreplace(output,output.split('.')[-1],'mp4',1)
-    encode.encode(video,outpath,inpath_is_file=True,quality=quality,processes=processes,options=['-r', nfps])
+    encode.encode(video,outpath,inpath_is_file=True,quality=quality,processes=processes,options=['-r', nfps],audio='copy',encoder=encoder)
 
     fr,gfr,ts,te = get_keyframes(output,nkey,M=M,N=N,nfps=nfps)
 
@@ -38,8 +38,11 @@ def get_video_descriptor(video,nfps=3,quality='320x640',nkey=180,processes=1):
         for name in dirs:
             os.rmdir(os.path.join(root, name))
     os.rmdir(outpath)
-
-    return get_fingerprints(fr,gfr,ts,te)
+    
+    if return_frames:
+        return [get_fingerprints(fr,gfr,ts,te,**kwargs),fr,gfr]
+    else:
+        return get_fingerprints(fr,gfr,ts,te,**kwargs)
 
 
 def get_keyframes(video,nkey,N=320,M=640,nfps=10):
@@ -78,8 +81,6 @@ def get_keyframes(video,nkey,N=320,M=640,nfps=10):
             gray = np.zeros([M,N],dtype='uint32')
         else:
             nframes = nframes + 1
-        if cv2.waitKey(nfps) & 0xFF == ord('q'):
-            break
 
     #tstart and tend hold the timestamps of the keyframes in milliseconds
     tstart = [j * nkey/(1.0*nfps) * 1000.0 for j in range(len(keyframes))]
@@ -106,7 +107,7 @@ def get_keyframes(video,nkey,N=320,M=640,nfps=10):
 
 
 # Create fingerprints
-def get_fingerprints(kframes,gkframes,tstart,tend,thrs=0.5,nfeatures=400,nlevels=15):
+def get_fingerprints(kframes,gkframes,tstart,tend,thrs=0.5,nfeatures=300,nlevels=15,fastThreshold=5):
     """
         get all the fingerprints of a keyframe.
 
@@ -117,7 +118,12 @@ def get_fingerprints(kframes,gkframes,tstart,tend,thrs=0.5,nfeatures=400,nlevels
                computed from intensity gradients (grey keyframe)
     """
     fprin = {'thumb': [],'cc': [],'orb': [],'tstart': [],'tend': []}
-    orbfunc = cv2.ORB_create(nfeatures=nfeatures,nlevels=nlevels)
+    
+    #fastThreshold keyword in ORB_create sets the sensitvity threshold for keypoints
+    #the default value of ORB_create is fastThreshold=20, we reset this default here to 
+    # 5, as we are dealing with rather noisy pictures in most cases 
+    #(lower threshold -> more keypoints)
+    orbfunc = cv2.ORB_create(nfeatures=nfeatures,nlevels=nlevels,fastThreshold=fastThreshold) 
 
     for i,f in enumerate(kframes):
         ### 1. Fingerprint
@@ -165,7 +171,7 @@ def get_fingerprints(kframes,gkframes,tstart,tend,thrs=0.5,nfeatures=400,nlevels
     fprin['nframes'] = len(fprin['thumb'])
     return fprin
 
-def get_picture_descriptor(pictures,quality='320x640',interp=cv2.INTER_AREA):
+def get_picture_descriptor(pictures,quality='320x640',interp=cv2.INTER_AREA,**kwargs):
     """
         get a single decriptor file for a picture folder.
         All pictures in there will be used as "keyframes"
@@ -512,16 +518,16 @@ def rreplace(s,old,new,number):
     li = s.rsplit(old, number)
     return new.join(li)
 
-def get_descriptor(file,fps=3,nsec=180,proc=1,quality='320x640',override=False,pmode=False):
+def get_descriptor(file,fps=3,nsec=180,proc=1,quality='320x640',override=False,pmode=False,extension='.dscr',**kwargs):
     """
         find all the fingerprint (descriptor) files of the involved videos.
         If no fingerprint file exists, it will be created
     """
 
     if pmode:
-        descriptor_file = os.path.join(file,'img.dscr')
+        descriptor_file = os.path.join(file,'img'+extension)
     else:
-        descriptor_file = file+'.dscr'
+        descriptor_file = file+extension
 
     if os.path.isfile(descriptor_file) and not override:
         with open(descriptor_file, 'rb') as input:
@@ -531,11 +537,9 @@ def get_descriptor(file,fps=3,nsec=180,proc=1,quality='320x640',override=False,p
             os.remove(descriptor_file)
         if pmode:
             files = encode.findFiles(file,formats=encode.pformats,single_level=True)
-            files = sorted([f.encode(encoding) for f in files])
-            descriptor = get_picture_descriptor(files,quality=quality)
+            descriptor = get_picture_descriptor(files,quality=quality,**kwargs)
         else:
-            file = file.encode(encoding)
-            descriptor = get_video_descriptor(file,nfps=fps,nkey=nsec,processes=proc,quality=quality)
+            descriptor = get_video_descriptor(file,nfps=fps,nkey=nsec,processes=proc,quality=quality,**kwargs)
 
         if not os.path.isfile(descriptor_file): #another process might have written that file in the mean time!
             with open(descriptor_file, 'wb') as output:
@@ -627,6 +631,7 @@ class compare_thread(threading.Thread):
                     return
                 self.self_lock.release()
 
+        self.self_lock.acquire()
         # load the old result file and check what needs
         # to be computed
         if self.pmode:
@@ -641,10 +646,10 @@ class compare_thread(threading.Thread):
         else:
             self.result = {}
         #cleanup old results:
-        self.self_lock.acquire()
         for i in list(self.result.keys()):
             if i not in self.querryfiles:
                 self.result.pop(i)
+
         self.self_lock.release()
         gc.collect()
 
@@ -800,7 +805,7 @@ def compare_chunk(chunks,fps,nsec,proc,quality,pmode,crosscheck):
             result[chunk[0]].append((chunk[1],res))
     return result
 
-def load_fingerprints(chunks,fps,nsec,proc,quality,pmode,crosscheck):
+def load_fingerprints(chunks,fps,nsec,proc,quality,pmode,crosscheck,**kwargs):
 
     #flatten chunks list
     ch = [name for sublist in chunks for name in sublist]
@@ -811,7 +816,7 @@ def load_fingerprints(chunks,fps,nsec,proc,quality,pmode,crosscheck):
         desc = get_descriptor(
             i,fps=fps,nsec=nsec,
             proc=proc,quality=quality,
-            override=False,pmode=pmode
+            override=False,pmode=pmode, **kwargs
             )
         fingerprints[i] = desc
 
