@@ -26,22 +26,23 @@ def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',pr
             processes: how many processes do we want to run
             override: if true we will override the output file if it already exists
             options: additional options to the encoder
-    #\\TODO acceptedformats
-    #\\TODO only do those files that are not already done
     """
     if not inpath_is_file:
         f = findFiles(inpath,formats=vformats)
     else:
         f = [inpath]
 
-    #\\TODO clean that up and make it useable
     video_quality_presets = {
         'low': ['-c:v', 'mpeg4', '-sws_flags', 'bilinear', '-vf', 'scale=640:-1', '-qmin', '6', '-qmax', '9','-r', '30'],
+        'x265': ['-c:v', 'libx265', '-vf', 'scale=640:-2', '-crf', '26', '-r', '30'],
+        'x264': ['-c:v', 'libx264', '-vf', 'scale=640:-2', '-crf', '26', '-r', '30'],
+        '320x640-x264': ['-c:v', 'libx264', '-vf', 'scale=320:640', '-crf', '26'],
         '320x640': ['-c:v', 'mpeg4', '-sws_flags', 'bilinear', '-vf', 'scale=320:640', '-qmin', '6', '-qmax', '9'],
         'qcif': ['-c:v', 'mpeg4', '-sws_flags', 'bilinear', '-vf', 'scale=72:144', '-qmin', '6', '-qmax', '9']
     }
     audio_presets = {
-        'mp4': ['-c:a', 'libmp3lame', '-ab', '128000', '-copyts', '-q:a', '5', '-ac', '2', '-ar', '44100', '-async', '3']
+        'mp4': ['-c:a', 'libmp3lame', '-ab', '128000', '-copyts', '-q:a', '5', '-ac', '2', '-ar', '44100', '-async', '3'],
+        'copy': ['-c:a', 'copy']
     }
     for infile in f:
         if len(infile)>260:
@@ -78,10 +79,10 @@ def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',pr
                 #in this case increase the number of that extension to avoid
                 #unnecessary long filenames
                 if i==1:
-                    try:
-                        i=int(split[0].split('_')[-1])+1
-                    except:
-                        pass
+                    uscore = split[0].rfind('_')
+                    if split[0][uscore+1:].isdigit():
+                        i=int(split[0][uscore+1:])+1
+                        split[0] = split[0][:uscore]
                 output = split[0] + '_' + str(i) + split[1]
                 i += 1
 
