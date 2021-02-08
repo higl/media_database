@@ -1011,7 +1011,7 @@ class EncodeWindow(tk.Toplevel):
         self.qualityLabel.grid(row=orow+2,column=ocol,columnspan=1,**options)
         self.qualityEntry = tk.Entry(self)
         self.qualityEntry.grid(row=orow+2,column=ocol+1,columnspan=1,**options)
-        self.qualityEntry.insert(tk.END,'low')
+        self.qualityEntry.insert(tk.END,'x264')
 
         self.procLabel = tk.Label(self,text='processors')
         self.procLabel.grid(row=orow+3,column=ocol,columnspan=1,**options)
@@ -1110,7 +1110,7 @@ class EncodeWindow(tk.Toplevel):
         for i in self.outfiles:
             self.outputList.insert(tk.END,i)
 
-        self.resultfile = str(hash(self.inp) + hash(self.outp))+'.encode'
+        self.resultfile = os.path.split(self.inp)[-1]+os.path.split(self.outp)[-1]+'.encode'
 
         if load:
             if os.path.isfile(self.resultfile) and not self.override.get():
@@ -1773,7 +1773,7 @@ class CompareWindow(tk.Toplevel):
                 kwargs['querrysource'] = self.querrysource.get()
                 kwargs['pmode'] = self.pmode.get()
                 kwargs['crosscheck'] = self.crossCheck.get()
-                res_file = str(hash(self.inp) + hash(self.outp))
+                res_file = os.path.split(self.inp)[-1] + os.path.split(self.outp)[-1]
                 self.result = {}
                 self.thread = eacc.compare_thread(
                                 self.infiles,self.outfiles,
@@ -1856,7 +1856,7 @@ class CompareWindow(tk.Toplevel):
                 self.move_to_db(i,self.master.media_database)
                 self.result.pop(i)
 
-            res_file = str(hash(self.inp) + hash(self.outp))
+            res_file = os.path.split(self.inp)[-1] + os.path.split(self.outp)[-1]
             res_file = res_file + '.res'
             with open(res_file, 'wb') as output:
                 pickle.dump(self.result, output, pickle.HIGHEST_PROTOCOL)
