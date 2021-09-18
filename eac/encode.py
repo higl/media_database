@@ -72,18 +72,20 @@ def encode(inpath,outpath,inpath_is_file=False,quality='low',encoder='ffmpeg',pr
         output = rreplace(output,output.split('.')[-1],'mp4',1)
         output = os.path.join(outpath,output)
         if override:
-            i = 1
+            #the current file might already have an extended filename
+            #in this case increase the number of that extension to avoid
+            #unnecessary long filenames
+            name,ext = os.path.splitext(output)
+            uscore = name.rfind('_')
+            if name[uscore+1:].isdigit():
+                name = name[:uscore]
+                output = name+ext
+
+            i = 0
+            old_output = output
             while os.path.isfile(output):
-                split = os.path.splitext(output)
-                #the current file might already have an extended filename
-                #in this case increase the number of that extension to avoid
-                #unnecessary long filenames
-                if i==1:
-                    uscore = split[0].rfind('_')
-                    if split[0][uscore+1:].isdigit():
-                        i=int(split[0][uscore+1:])+1
-                        split[0] = split[0][:uscore]
-                output = split[0] + '_' + str(i) + split[1]
+                name,ext = os.path.splitext(old_output)
+                output = name + '_' + str(i) + ext
                 i += 1
 
         ffmpegopts += [output]
