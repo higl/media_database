@@ -1171,7 +1171,26 @@ class EncodeWindow(tk.Toplevel):
         """
         if tkMessageBox.askokcancel("Do you really want to finalize all results?"):
             for i in list(self.result.keys()):
-                if os.path.getsize(i) > os.path.getsize(self.result[i]):
+                try:
+                    size = os.path.getsize(i)
+                except FileNotFoundError:
+                    print("""
+                        The source file {} does not exist, maybe it has already been finalized, 
+                        but the result file has not been saved correctly.
+                        We will assume that this is the case and ignore this result!""".format(i))
+                    self.result.pop(i)
+                    continue
+                try:
+                    resultsize = os.path.getsize(self.result[i])
+                except FileNotFoundError:
+                    print("""
+                        The result file {} does not exist, maybe it has not been converted yet, 
+                        and the result file has not been saved correctly.
+                        We will assume that this is the case and ignore this result!""".format(result[i]))
+                    self.result.pop(i)
+                    continue
+
+                if size > resultsize:
                     try:
                         os.remove(i)
                     except:
@@ -1892,11 +1911,21 @@ class CompareWindow(tk.Toplevel):
                 path = os.path.join(destination,os.path.splitext(f)[0][0:250-len(f)-2-len(destination)])
                 path = path.rstrip()
 
+        #the current file might already have an extended filename
+        #in this case increase the number of that extension to avoid
+        #unnecessary long filenames
+        name,ext = os.path.splitext(path)
+        uscore = name.rfind('_')
+        if name[uscore+1:].isdigit():
+            name = name[:uscore]
+            path = name+ext
+
         i = 0
         opath = path
         while os.path.isdir(path):
-            path = opath + '_' + str(str(i),encoding)
-            i = i+1
+            name,ext = os.path.splitext(opath)
+            path = name + '_' + str(i) + ext
+            i += 1
 
         if pmode:
             shutil.move(fi,path)
