@@ -309,7 +309,15 @@ def compare_frame(querry,source,wth=0.25,wcc=0.25,worb=0.5,qth=0.5,qcc=0.75,qorb
     """
         compare the fingerprints of two keyframes and return a probability score of how similar they are
     """
-    cor = correlation(querry[0],source[0])
+    
+    #old way that uses scipy.spatial.distance.correlation
+    #(current input to this function doesn't work with this version any longer)
+    #cor = correlation(querry[0],source[0])
+
+    #new correlation calculation
+    qs = np.average(querry[0][0]*source[0][0])
+    cor = qs/np.sqrt(querry[0][1]*source[0][1])
+
     if cor >= qth:
         dist_cc = 1-distance_precomp(querry[1],source[1])
         if dist_cc >= qcc:
@@ -339,6 +347,12 @@ def compare_clips(querry,source,threshold=0.75,orb_matcher=None):
     end_match_s = []
     idf_s = []
     score = []
+    
+    #precompute part of the distance correlation instead of using
+    #scipy.spatial.distance.correlation - we do this to increase performance
+    #by significantly reducing the amount of np.flatten and np.average calls 
+    preq = precompute_distance(querry)
+    pres = precompute_distance(source)
 
     for i in range(querry['nframes']):
         if len(idf_q)>0 and idf_q[-1] == i-1:
@@ -347,8 +361,8 @@ def compare_clips(querry,source,threshold=0.75,orb_matcher=None):
             offset = 0
 
         for j in range(offset,source['nframes']):
-            thq = querry['thumb'][i]
-            ths = source['thumb'][j]
+            thq = preq[i]
+            ths = pres[j]
             ccq = querry['cc'][i]
             ccs = source['cc'][j]
             orbq = querry['orb'][i]
@@ -384,6 +398,13 @@ def compare_pictures(querry,source,threshold=0.75,orb_matcher=None):
     idf_s_start = []
     idf_s_end = []
     score = []
+
+    #precompute part of the distance correlation instead of using
+    #scipy.spatial.distance.correlation - we do this to increase performance
+    #by significantly reducing the amount of np.flatten and np.average calls 
+    preq = precompute_distance(querry)
+    pres = precompute_distance(source)
+
     for i in range(querry['nframes']):
         if len(idf_q_start)>0 and idf_q_end[-1] == i-1:
             offset = idf_s_start[-1]+1
@@ -391,8 +412,8 @@ def compare_pictures(querry,source,threshold=0.75,orb_matcher=None):
             offset = 0
 
         for j in range(offset,source['nframes']):
-            thq = querry['thumb'][i]
-            ths = source['thumb'][j]
+            thq = preq[i]
+            ths = pres[j]
             ccq = querry['cc'][i]
             ccs = source['cc'][j]
             orbq = querry['orb'][i]
@@ -412,6 +433,17 @@ def compare_pictures(querry,source,threshold=0.75,orb_matcher=None):
                 break
 
     return np.array([idf_q_start, idf_q_end, idf_s_start, idf_s_end,score],dtype = 'uint32')
+
+def precompute_distance(descriptor):
+    precomp = []
+    for i in range(descriptor['nframes']):
+        thq = descriptor['thumb'][i]
+        flat = thq.flatten()
+        avg = np.average(flat)
+        flat = flat-avg
+        norm = np.average(np.square(flat))
+        precomp.append([flat,norm])
+    return precomp
 
 def distance(querry,source,length=7):
     """
@@ -495,7 +527,7 @@ def correlation(querry,source):
     """
     q = querry.flatten()
     s = source.flatten()
-    return -(scipy.spatial.distance.correlation(q,s)-1.0)
+    return 1.0-scipy.spatial.distance.correlation(q,s)
 
 
 def blockshaped(arr, nrows, ncols):
